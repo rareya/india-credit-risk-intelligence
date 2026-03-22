@@ -1,0 +1,41 @@
+{
+  "feature_names": [
+    "num_times_delinquent",
+    "num_times_60p_dpd",
+    "delinquency_score",
+    "missed_payment_ratio",
+    "Total_TL",
+    "active_loan_ratio",
+    "loan_type_diversity",
+    "Age_Oldest_TL",
+    "AGE",
+    "NETMONTHLYINCOME",
+    "enq_L6m",
+    "enq_L12m",
+    "tot_enq",
+    "Gold_TL",
+    "Home_TL"
+  ],
+  "n_features": 15,
+  "metrics": {
+    "test_auc": 0.8985,
+    "test_precision": 0.5931,
+    "test_recall": 0.8346,
+    "test_f1": 0.6935,
+    "cv_auc_mean": 0.898,
+    "cv_auc_std": 0.0041,
+    "n_test": 10268,
+    "n_features": 15,
+    "confusion_matrix": [
+      [
+        6074,
+        1527
+      ],
+      [
+        441,
+        2226
+      ]
+    ]
+  },
+  "model_type": "XGBClassifier"
+}

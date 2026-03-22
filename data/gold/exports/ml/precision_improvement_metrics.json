@@ -1,0 +1,33 @@
+{
+  "version": "v2_model_B_balanced",
+  "decision": "Model B selected: best F1 sweet spot (P=0.69, R=0.71)",
+  "threshold": 0.5,
+  "scale_pos_weight": 1.43,
+  "rationale": {
+    "why_not_original": "weight=2.85 gave recall=0.83 but precision=0.59 \u2014 too many false alarms",
+    "why_not_precision": "threshold=0.62 gave precision=0.76 but recall=0.60 \u2014 misses too many risky borrowers",
+    "why_model_B": "weight=1.43 + threshold=0.50 gives balanced P=0.69 R=0.71 F1=0.70"
+  },
+  "original": {
+    "precision": 0.5931,
+    "recall": 0.8346,
+    "f1": 0.6935,
+    "auc": 0.8985
+  },
+  "model_B": {
+    "precision": 0.6907,
+    "recall": 0.7102,
+    "f1": 0.7003,
+    "auc": 0.8994,
+    "cm": [
+      [
+        6753,
+        848
+      ],
+      [
+        773,
+        1894
+      ]
+    ]
+  }
+}
