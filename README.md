@@ -51,6 +51,12 @@ See [`docs/LEAKAGE_ANALYSIS.md`](docs/LEAKAGE_ANALYSIS.md) for the full analysis
 
 ---
 
+![Dashboard Overview](assets/screenshots/dashboard/DB_Page1.png)
+
+![Dashboard Overview](assets/screenshots/dashboard/DB_Page2.png)
+
+![Dashboard Overview](assets/screenshots/dashboard/DB_Page3.png)
+
 ## The Dataset
 
 Two independent, publicly available Kaggle data sources are joined on `PROSPECTID`.
