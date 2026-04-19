@@ -14,7 +14,34 @@
 > **This is not an ML notebook. It is a decision-support system.**
 
 ---
+---
 
+## Table of Contents
+* [What This Project Does](#what-this-project-does)
+* [The Key Finding](#the-key-finding)
+* [Key Metrics](#key-metrics)
+* [The Dataset](#the-dataset)
+    * [Target Variable](#target-variable)
+    * [Key Tables Produced](#key-tables-produced)
+* [Data Pipeline](#data-pipeline)
+    * [Pipeline Phases](#pipeline-phases)
+* [Dashboard — 7 Panels](#dashboard--7-panels)
+* [Analytical Methods](#analytical-methods)
+* [Feature Engineering](#feature-engineering)
+* [SQL Query Library](#sql-query-library-10-business-queries)
+* [Three Credit Policy Recommendations](#three-credit-policy-recommendations)
+* [Project Structure](#project-structure)
+* [Setup](#setup)
+    * [Prerequisites](#prerequisites)
+    * [Step 1 — Clone and Install](#step-1--clone-and-install)
+    * [Step 2 — Download the Dataset](#step-2--download-the-dataset)
+    * [Step 3 — Run the Pipeline](#step-3--run-the-pipeline)
+    * [Step 4 — Run with Docker (Optional)](#step-4--run-with-docker-optional)
+* [Tech Stack](#tech-stack)
+* [Why India Context Matters](#why-india-context-matters)
+* [Documentation](#documentation)
+
+---
 ## What This Project Does
 
 This project ingests raw CIBIL-style loan data, processes it through a Medallion Architecture pipeline (Bronze → Silver → Gold), trains an XGBoost probability-of-default model, and delivers an interactive 7-panel Streamlit dashboard plus a 10-query SQL analytics library.
@@ -51,11 +78,7 @@ See [`docs/LEAKAGE_ANALYSIS.md`](docs/LEAKAGE_ANALYSIS.md) for the full analysis
 
 ---
 
-![Dashboard Overview](assets/screenshots/dashboard/DB_Page1.png)
 
-![Dashboard Overview](assets/screenshots/dashboard/DB_Page2.png)
-
-![Dashboard Overview](assets/screenshots/dashboard/DB_Page3.png)
 
 ## The Dataset
 
