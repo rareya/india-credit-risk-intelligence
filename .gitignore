@@ -39,6 +39,11 @@ venv.bak/
 data/bronze/
 data/silver/
 data/raw/
+data/processed/
+data/*.db
+data/gold/*.duckdb
+data/powerbi/*.pbix
+powerbi/*.pbix
 
 
 # ── Model binaries (use git-lfs or just exclude) ─────────────────────────────
