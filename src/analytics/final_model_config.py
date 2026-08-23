@@ -1,54 +1,61 @@
 """
 final_model_config.py
 
-Canonical configuration for the SELECTED production candidate model.
+Single source of truth for the SELECTED production model.
 
 Selected model:
     Conservative XGBoost
+    conservative_xgb_v1
 
-This file is the single source of truth for:
-    - feature registry
-    - XGBoost parameters
+This module defines:
+    - frozen feature governance
+    - target definition
     - preprocessing
-    - random state
+    - exact XGBoost hyperparameters
+    - model construction
+    - Gold dataset loading
+    - validation helpers
 
-Downstream validation scripts such as:
-    - cross_validate.py
-    - calibrate_model.py
-    - shap_analysis.py
-    - subgroup_robustness.py
+IMPORTANT
+---------
+This file does NOT:
+    - compare models
+    - run cross-validation
+    - perform calibration
+    - run SHAP
+    - select thresholds
+    - train/save the final artifact
 
-must use this configuration so that they evaluate the SAME model.
+Those are separate analytical/deployment steps.
+
+All downstream production/analytical scripts should import
+this module so that they use the exact same model definition.
 """
+
+from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
+import xgboost as xgb
 
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
-from xgboost import XGBClassifier
-
-from feature_registry import (
-    TARGET,
-    CONSERVATIVE_FEATURES,
-    EXCLUDED_FEATURES,
-    validate_registry,
-)
+from sklearn.preprocessing import OneHotEncoder
 
 
 # ============================================================
-# PATHS
+# PROJECT PATHS
 # ============================================================
 
-GOLD_DIR = Path("data/gold/exports")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-FACT_FILE = (
-    GOLD_DIR /
-    "fact_credit_risk.parquet"
+GOLD_PATH = (
+    PROJECT_ROOT
+    / "data"
+    / "gold"
+    / "gold_fact_table.parquet"
 )
 
 
@@ -60,58 +67,281 @@ MODEL_NAME = "Conservative XGBoost"
 
 MODEL_VERSION = "conservative_xgb_v1"
 
-RANDOM_STATE = 42
+FEATURE_SET_NAME = "conservative_v1"
 
-TARGET_COLUMN = TARGET
-
-FEATURES = list(CONSERVATIVE_FEATURES)
+FEATURE_SET_STATUS = "FROZEN"
 
 
 # ============================================================
-# XGBOOST PARAMETERS
+# TARGET
 # ============================================================
 
-XGB_PARAMS = {
-    "n_estimators": 400,
-    "max_depth": 4,
-    "learning_rate": 0.05,
-    "subsample": 0.8,
-    "colsample_bytree": 0.8,
-    "min_child_weight": 5,
-    "reg_lambda": 2.0,
-    "reg_alpha": 0.0,
-    "objective": "binary:logistic",
-    "eval_metric": "logloss",
-    "random_state": RANDOM_STATE,
-    "n_jobs": -1,
+TARGET_COLUMN = "default_risk"
+
+TARGET_DEFINITION = {
+    "0": "P1/P2 low-risk classification proxy",
+    "1": "P3/P4 high-risk classification proxy",
 }
 
 
 # ============================================================
-# VALIDATION
+# FROZEN CONSERVATIVE FEATURE SET
 # ============================================================
 
-def validate_final_model_registry(df):
+FEATURES = [
+    "active_loan_ratio",
+    "active_loans",
+    "age",
+    "auto_loans",
+    "closed_loans",
+    "credit_card_loans",
+    "credit_history_months",
+    "delinquency_score",
+    "education",
+    "gender",
+    "gold_loans",
+    "has_credit_card",
+    "has_gold_loan",
+    "has_home_loan",
+    "has_personal_loan",
+    "home_loans",
+    "income_tier",
+    "loan_type_diversity",
+    "marital_status",
+    "missed_payment_ratio",
+    "monthly_income_inr",
+    "num_times_60p_dpd",
+    "num_times_delinquent",
+    "personal_loans",
+    "recent_enquiries_12m",
+    "recent_enquiries_6m",
+    "secured_loans",
+    "total_enquiries",
+    "total_missed_payments",
+    "unsecured_loans",
+]
+
+
+# ============================================================
+# FEATURE TYPES
+# ============================================================
+
+NUMERIC_FEATURES = [
+    "active_loan_ratio",
+    "active_loans",
+    "age",
+    "auto_loans",
+    "closed_loans",
+    "credit_card_loans",
+    "credit_history_months",
+    "delinquency_score",
+    "gold_loans",
+    "has_credit_card",
+    "has_gold_loan",
+    "has_home_loan",
+    "has_personal_loan",
+    "home_loans",
+    "loan_type_diversity",
+    "missed_payment_ratio",
+    "monthly_income_inr",
+    "num_times_60p_dpd",
+    "num_times_delinquent",
+    "personal_loans",
+    "recent_enquiries_12m",
+    "recent_enquiries_6m",
+    "secured_loans",
+    "total_enquiries",
+    "total_missed_payments",
+    "unsecured_loans",
+]
+
+
+CATEGORICAL_FEATURES = [
+    "education",
+    "gender",
+    "income_tier",
+    "marital_status",
+]
+
+
+# ============================================================
+# GOVERNANCE
+# ============================================================
+
+REVIEW_FEATURES_INCLUDED = [
+    "recent_enquiries_6m",
+    "recent_enquiries_12m",
+    "total_enquiries",
+]
+
+# These are explicitly NOT part of the selected feature set.
+EXCLUDED_FEATURES = [
+    "cibil_score",
+    "cibil_band",
+]
+
+
+# ============================================================
+# HYPERPARAMETERS
+# ============================================================
+
+RANDOM_STATE = 42
+
+N_ESTIMATORS = 300
+MAX_DEPTH = 4
+LEARNING_RATE = 0.05
+SUBSAMPLE = 0.8
+COLSAMPLE_BYTREE = 0.8
+
+OBJECTIVE = "binary:logistic"
+EVAL_METRIC = "logloss"
+
+
+# ============================================================
+# PREPROCESSING
+# ============================================================
+
+def build_preprocessor() -> ColumnTransformer:
     """
-    Validate that the Gold table contains exactly the
-    governed Conservative feature set.
+    Build the exact preprocessing pipeline used by
+    conservative_xgb_v1.
     """
 
-    validate_registry(df.columns)
-
-    forbidden_present = (
-        set(FEATURES)
-        & set(EXCLUDED_FEATURES)
+    numeric_pipeline = Pipeline(
+        steps=[
+            (
+                "imputer",
+                SimpleImputer(
+                    strategy="median"
+                ),
+            )
+        ]
     )
 
-    if forbidden_present:
+    categorical_pipeline = Pipeline(
+        steps=[
+            (
+                "imputer",
+                SimpleImputer(
+                    strategy="most_frequent"
+                ),
+            ),
+            (
+                "onehot",
+                OneHotEncoder(
+                    handle_unknown="ignore"
+                ),
+            ),
+        ]
+    )
+
+    return ColumnTransformer(
+        transformers=[
+            (
+                "numeric",
+                numeric_pipeline,
+                NUMERIC_FEATURES,
+            ),
+            (
+                "categorical",
+                categorical_pipeline,
+                CATEGORICAL_FEATURES,
+            ),
+        ],
+        remainder="drop",
+    )
+
+
+# ============================================================
+# MODEL BUILDER
+# ============================================================
+
+def build_xgb_model() -> Pipeline:
+    """
+    Construct the exact selected Conservative XGBoost.
+
+    IMPORTANT:
+    Do not change hyperparameters here without creating
+    a new model version.
+    """
+
+    preprocessor = build_preprocessor()
+
+    classifier = xgb.XGBClassifier(
+        n_estimators=N_ESTIMATORS,
+        max_depth=MAX_DEPTH,
+        learning_rate=LEARNING_RATE,
+        subsample=SUBSAMPLE,
+        colsample_bytree=COLSAMPLE_BYTREE,
+        objective=OBJECTIVE,
+        eval_metric=EVAL_METRIC,
+        random_state=RANDOM_STATE,
+        n_jobs=-1,
+    )
+
+    return Pipeline(
+        steps=[
+            (
+                "preprocessor",
+                preprocessor,
+            ),
+            (
+                "model",
+                classifier,
+            ),
+        ]
+    )
+
+
+# ============================================================
+# DATA LOADING
+# ============================================================
+
+def load_gold_data() -> pd.DataFrame:
+    """
+    Load the Gold fact table used by the ML pipeline.
+    """
+
+    if not GOLD_PATH.exists():
+        raise FileNotFoundError(
+            f"Gold fact table not found:\n{GOLD_PATH}"
+        )
+
+    df = pd.read_parquet(GOLD_PATH)
+
+    return df
+
+
+# ============================================================
+# GOVERNANCE VALIDATION
+# ============================================================
+
+def validate_model_configuration(
+    df: pd.DataFrame,
+) -> None:
+    """
+    Validate that the dataset and frozen configuration agree.
+    """
+
+    if TARGET_COLUMN not in df.columns:
         raise ValueError(
-            "FINAL MODEL LEAKAGE GUARD FAILED.\n"
-            "Forbidden features detected:\n"
-            + "\n".join(
-                f"  - {feature}"
-                for feature in sorted(forbidden_present)
-            )
+            f"Target column '{TARGET_COLUMN}' "
+            "is missing from Gold data."
+        )
+
+    if len(FEATURES) != 30:
+        raise ValueError(
+            f"Expected exactly 30 frozen features; "
+            f"found {len(FEATURES)}."
+        )
+
+    if set(FEATURES) != (
+        set(NUMERIC_FEATURES)
+        | set(CATEGORICAL_FEATURES)
+    ):
+        raise ValueError(
+            "Feature type definitions do not match "
+            "the frozen feature list."
         )
 
     missing = [
@@ -122,165 +352,74 @@ def validate_final_model_registry(df):
 
     if missing:
         raise ValueError(
-            "Final Conservative model features missing:\n"
+            "Frozen model features missing from Gold data:\n"
             + "\n".join(
                 f"  - {feature}"
                 for feature in missing
             )
         )
 
-    return True
+    forbidden = [
+        feature
+        for feature in FEATURES
+        if feature in EXCLUDED_FEATURES
+    ]
 
-
-# ============================================================
-# PREPROCESSOR
-# ============================================================
-
-def build_preprocessor(X):
-    """
-    Exactly matches the preprocessing used by run_ml_model.py.
-    """
-
-    numeric_features = X.select_dtypes(
-        include=np.number
-    ).columns.tolist()
-
-    categorical_features = X.select_dtypes(
-        exclude=np.number
-    ).columns.tolist()
-
-    numeric_pipeline = Pipeline([
-        (
-            "imputer",
-            SimpleImputer(
-                strategy="median"
-            )
-        ),
-        (
-            "scaler",
-            StandardScaler()
-        ),
-    ])
-
-    categorical_pipeline = Pipeline([
-        (
-            "imputer",
-            SimpleImputer(
-                strategy="most_frequent"
-            )
-        ),
-        (
-            "onehot",
-            OneHotEncoder(
-                handle_unknown="ignore"
-            )
-        ),
-    ])
-
-    return ColumnTransformer(
-        transformers=[
-            (
-                "numeric",
-                numeric_pipeline,
-                numeric_features,
-            ),
-            (
-                "categorical",
-                categorical_pipeline,
-                categorical_features,
-            ),
-        ]
-    )
-
-
-# ============================================================
-# MODEL
-# ============================================================
-
-def build_xgb_model(X):
-    """
-    Build the exact selected Conservative XGBoost pipeline.
-    """
-
-    preprocessor = build_preprocessor(X)
-
-    model = XGBClassifier(
-        **XGB_PARAMS
-    )
-
-    return Pipeline([
-        (
-            "preprocessor",
-            preprocessor
-        ),
-        (
-            "model",
-            model
-        ),
-    ])
-
-
-# ============================================================
-# DATA LOADING
-# ============================================================
-
-def load_gold_data():
-    """
-    Load and validate the Gold fact table.
-    """
-
-    if not FACT_FILE.exists():
-        raise FileNotFoundError(
-            f"Missing Gold fact table:\n{FACT_FILE}"
-        )
-
-    df = pd.read_parquet(
-        FACT_FILE
-    )
-
-    validate_final_model_registry(df)
-
-    if TARGET_COLUMN not in df.columns:
+    if forbidden:
         raise ValueError(
-            f"Target '{TARGET_COLUMN}' not found."
+            "Forbidden features entered the selected model:\n"
+            + "\n".join(
+                f"  - {feature}"
+                for feature in forbidden
+            )
         )
-
-    if df[TARGET_COLUMN].isna().any():
-        raise ValueError(
-            "Target contains missing values."
-        )
-
-    unique_target = set(
-        df[TARGET_COLUMN]
-        .dropna()
-        .unique()
-    )
-
-    if not unique_target.issubset({0, 1}):
-        raise ValueError(
-            f"Target must be binary. "
-            f"Found: {unique_target}"
-        )
-
-    return df
 
 
 # ============================================================
-# METADATA
+# CONFIGURATION METADATA
 # ============================================================
 
-def final_model_metadata():
+def get_model_metadata() -> dict:
     """
-    Return metadata describing the frozen model.
+    Return the authoritative configuration metadata.
     """
 
     return {
         "model_name": MODEL_NAME,
         "model_version": MODEL_VERSION,
+        "model_type": (
+            "sklearn Pipeline "
+            "(ColumnTransformer + XGBClassifier)"
+        ),
+        "feature_set_name": FEATURE_SET_NAME,
+        "feature_set_status": FEATURE_SET_STATUS,
         "target": TARGET_COLUMN,
-        "feature_count": len(FEATURES),
+        "target_definition": TARGET_DEFINITION,
+        "n_features": len(FEATURES),
         "features": FEATURES,
-        "random_state": RANDOM_STATE,
-        "xgb_params": XGB_PARAMS,
-        "feature_governance": "conservative",
+        "numeric_features": NUMERIC_FEATURES,
+        "categorical_features": CATEGORICAL_FEATURES,
+        "review_features_included": (
+            REVIEW_FEATURES_INCLUDED
+        ),
+        "excluded_features": EXCLUDED_FEATURES,
+        "hyperparameters": {
+            "n_estimators": N_ESTIMATORS,
+            "max_depth": MAX_DEPTH,
+            "learning_rate": LEARNING_RATE,
+            "subsample": SUBSAMPLE,
+            "colsample_bytree": COLSAMPLE_BYTREE,
+            "objective": OBJECTIVE,
+            "eval_metric": EVAL_METRIC,
+            "random_state": RANDOM_STATE,
+        },
+        "preprocessing": {
+            "numeric": (
+                "SimpleImputer(strategy=median)"
+            ),
+            "categorical": (
+                "SimpleImputer(strategy=most_frequent)"
+                " -> OneHotEncoder(handle_unknown=ignore)"
+            ),
+        },
     }
