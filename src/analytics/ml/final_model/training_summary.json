@@ -1,0 +1,92 @@
+{
+  "run_name": "conservative_xgb_v1_persistence_run",
+  "model_reference": "conservative_xgb_v1.joblib",
+  "source_data": "data/gold/exports/fact_credit_risk.parquet",
+  "dataset": {
+    "total_rows": 51336,
+    "n_features_used": 30,
+    "target": "default_risk",
+    "target_distribution": {
+      "class_0_safe": 38002,
+      "class_1_risky": 13334,
+      "positive_rate_pct": 25.97
+    }
+  },
+  "evaluation_protocol": {
+    "split": "80/20 stratified, random_state=42",
+    "train_rows": 41068,
+    "test_rows": 10268,
+    "test_metrics": {
+      "roc_auc": 0.8970988217316146,
+      "pr_auc": 0.7775732775281332,
+      "brier_score": 0.10718883574008942,
+      "precision_at_0.50": 0.7411610650371017,
+      "recall_at_0.50": 0.6366704161979753,
+      "f1_at_0.50": 0.6849536103267446
+    }
+  },
+  "deployed_model_training": {
+    "method": "refit on 100% of dataset after held-out evaluation",
+    "rows_used": 51336
+  },
+  "cross_validation_reference": {
+    "note": "See data/gold/exports/analytics/ml/cross_validation/cv_summary.parquet for 5-fold CV",
+    "mean_roc_auc": 0.8962,
+    "std_roc_auc": 0.0042
+  },
+  "hyperparameters": {
+    "n_estimators": 300,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "random_state": 42
+  },
+  "governance_status": {
+    "feature_set_status": "FROZEN",
+    "governance_checks": {
+      "feature_leakage_audit": "PASS",
+      "feature_semantics_audit": "PASS",
+      "prediction_time_provenance": "PASS"
+    },
+    "note": "Provenance sign-off PASSED (30/30 features) per data/gold/exports/analytics/ml/provenance/prediction_time_provenance_summary.json. final_model_summary.json still shows decision=PENDING because final_model_selection.py has not been re-run since provenance passed -- that file is stale, not this one."
+  },
+  "known_limitations": [
+    "cibil_band subgroup 'very_good' shows ROC-AUC ~0.61 -- weak discrimination in the safest population (see subgroup_robustness outputs).",
+    "cibil_band subgroup 'fair' has default_rate=1.00 in some test splits (n small, degenerate class balance) -- ROC-AUC undefined for that bin, not '1.0 perfect'."
+  ],
+  "artifact_inventory": [
+    {
+      "file": "conservative_xgb_v1.joblib",
+      "size_bytes": 516599
+    },
+    {
+      "file": "feature_manifest.json",
+      "size_bytes": 12280
+    },
+    {
+      "file": "final_model_summary.json",
+      "size_bytes": 671
+    },
+    {
+      "file": "model_governance_decision.csv",
+      "size_bytes": 535
+    },
+    {
+      "file": "model_governance_decision.parquet",
+      "size_bytes": 3326
+    },
+    {
+      "file": "model_metadata.json",
+      "size_bytes": 4311
+    }
+  ],
+  "environment": {
+    "python": "3.12.3",
+    "scikit_learn": "1.8.0",
+    "xgboost": "3.4.1"
+  },
+  "generated_at_utc": "2026-08-23T08:21:11.440519+00:00"
+}

@@ -1,0 +1,507 @@
+{
+  "manifest_name": "conservative_v1_feature_manifest",
+  "target": "default_risk",
+  "n_features": 30,
+  "excluded_features": [
+    "borrower_id",
+    "default_risk",
+    "risk_band",
+    "risk_grade",
+    "risk_grade_numeric"
+  ],
+  "review_features": [
+    "cibil_band",
+    "cibil_score",
+    "recent_enquiries_12m",
+    "recent_enquiries_6m",
+    "total_enquiries"
+  ],
+  "high_missingness_features": [
+    "recent_enquiries_12m",
+    "recent_enquiries_6m",
+    "total_enquiries"
+  ],
+  "high_missingness_note": "['recent_enquiries_12m', 'recent_enquiries_6m', 'total_enquiries'] carry >5% nulls (imputed via median). recent_enquiries_6m is the single strongest SHAP predictor in this model, so its 12.3% null rate deserves explicit disclosure -- median imputation silently treats missing enquiry history as 'average risk', which will understate risk for borrowers with genuinely no bureau enquiry record (thin-file segment) if that absence is itself informative.",
+  "features": [
+    {
+      "name": "active_loan_ratio",
+      "dtype": "float64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 503,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.5775,
+        "median": 0.5556
+      }
+    },
+    {
+      "name": "active_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 32,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 47.0,
+        "mean": 2.0882,
+        "median": 1.0
+      }
+    },
+    {
+      "name": "age",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 47,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 21.0,
+        "max": 77.0,
+        "mean": 33.7585,
+        "median": 32.0
+      }
+    },
+    {
+      "name": "auto_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 17,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 27.0,
+        "mean": 0.5933,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "closed_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 100,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 216.0,
+        "mean": 2.7704,
+        "median": 1.0
+      }
+    },
+    {
+      "name": "credit_card_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 15,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 27.0,
+        "mean": 0.125,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "credit_history_months",
+      "dtype": "float64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 40,
+      "null_pct": 0.078,
+      "n_unique": 294,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 392.0,
+        "mean": 45.377,
+        "median": 33.0
+      }
+    },
+    {
+      "name": "delinquency_score",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 289,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 571.0,
+        "mean": 7.469,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "education",
+      "dtype": "str",
+      "role": "categorical",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 6,
+      "preprocessing": "SimpleImputer(most_frequent) -> OneHotEncoder(handle_unknown=ignore)",
+      "categories": [
+        "12TH",
+        "GRADUATE",
+        "OTHERS",
+        "POST_GRADUATE",
+        "PROFESSIONAL",
+        "SSC"
+      ]
+    },
+    {
+      "name": "gender",
+      "dtype": "str",
+      "role": "categorical",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 2,
+      "preprocessing": "SimpleImputer(most_frequent) -> OneHotEncoder(handle_unknown=ignore)",
+      "categories": [
+        "F",
+        "M"
+      ]
+    },
+    {
+      "name": "gold_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 97,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 235.0,
+        "mean": 1.5618,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "has_credit_card",
+      "dtype": "bool",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 2,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.0895,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "has_gold_loan",
+      "dtype": "bool",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 2,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.2711,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "has_home_loan",
+      "dtype": "bool",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 2,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.0529,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "has_personal_loan",
+      "dtype": "bool",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 2,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.1679,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "home_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 9,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 10.0,
+        "mean": 0.0701,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "income_tier",
+      "dtype": "str",
+      "role": "categorical",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 5,
+      "preprocessing": "SimpleImputer(most_frequent) -> OneHotEncoder(handle_unknown=ignore)",
+      "categories": [
+        "high",
+        "low",
+        "middle",
+        "upper_middle",
+        "very_low"
+      ]
+    },
+    {
+      "name": "loan_type_diversity",
+      "dtype": "int8",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 7,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 6.0,
+        "mean": 1.4671,
+        "median": 1.0
+      }
+    },
+    {
+      "name": "marital_status",
+      "dtype": "str",
+      "role": "categorical",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 2,
+      "preprocessing": "SimpleImputer(most_frequent) -> OneHotEncoder(handle_unknown=ignore)",
+      "categories": [
+        "MARRIED",
+        "SINGLE"
+      ]
+    },
+    {
+      "name": "missed_payment_ratio",
+      "dtype": "float64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 319,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 1.0,
+        "mean": 0.134,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "monthly_income_inr",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 1316,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 2500000.0,
+        "mean": 26424.1856,
+        "median": 23000.0
+      }
+    },
+    {
+      "name": "num_times_60p_dpd",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 43,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 52.0,
+        "mean": 0.427,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "num_times_delinquent",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 64,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 74.0,
+        "mean": 1.5737,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "personal_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 21,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 29.0,
+        "mean": 0.2825,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "recent_enquiries_12m",
+      "dtype": "float64",
+      "role": "numeric",
+      "governance_tier": "review_required",
+      "null_count": 6321,
+      "null_pct": 12.313,
+      "n_unique": 65,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 87.0,
+        "mean": 3.0111,
+        "median": 2.0
+      }
+    },
+    {
+      "name": "recent_enquiries_6m",
+      "dtype": "float64",
+      "role": "numeric",
+      "governance_tier": "review_required",
+      "null_count": 6321,
+      "null_pct": 12.313,
+      "n_unique": 54,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 66.0,
+        "mean": 1.9953,
+        "median": 1.0
+      }
+    },
+    {
+      "name": "secured_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 103,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 235.0,
+        "mean": 2.8449,
+        "median": 1.0
+      }
+    },
+    {
+      "name": "total_enquiries",
+      "dtype": "float64",
+      "role": "numeric",
+      "governance_tier": "review_required",
+      "null_count": 6321,
+      "null_pct": 12.313,
+      "n_unique": 84,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 1.0,
+        "max": 176.0,
+        "mean": 5.291,
+        "median": 3.0
+      }
+    },
+    {
+      "name": "total_missed_payments",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 22,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 34.0,
+        "mean": 0.5468,
+        "median": 0.0
+      }
+    },
+    {
+      "name": "unsecured_loans",
+      "dtype": "int64",
+      "role": "numeric",
+      "governance_tier": "conservative_core",
+      "null_count": 0,
+      "null_pct": 0.0,
+      "n_unique": 49,
+      "preprocessing": "SimpleImputer(median)",
+      "stats": {
+        "min": 0.0,
+        "max": 55.0,
+        "mean": 2.0137,
+        "median": 1.0
+      }
+    }
+  ],
+  "generated_at_utc": "2026-08-23T08:21:11.438217+00:00"
+}
