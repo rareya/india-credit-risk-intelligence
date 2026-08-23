@@ -1,0 +1,6 @@
+candidate,threshold,reason
+maximum_f1,0.4,Threshold with the highest F1 score on the test set.
+minimum_expected_loss_proxy,0.15,Threshold minimizing the analytical false-negative / false-positive cost proxy.
+high_recall,0.25,Highest-precision threshold among thresholds achieving recall >= 0.80.
+high_precision,0.45,Highest-recall threshold among thresholds achieving precision >= 0.70.
+balanced_precision_recall,0.4,Threshold maximizing the lower of precision and recall.

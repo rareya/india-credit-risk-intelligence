@@ -1,0 +1,14 @@
+{
+  "candidate_model": "Conservative XGBoost",
+  "decision": "CANDIDATE_FINAL_PENDING PREDICTION-TIME PROVENANCE SIGN-OFF",
+  "cross_validation_mean_roc_auc": 0.8958245390829178,
+  "cross_validation_std_roc_auc": 0.003503436973509516,
+  "cross_validation_mean_pr_auc": 0.7717458496152382,
+  "cross_validation_mean_brier": 0.10802840320889415,
+  "best_calibration_method": "Base XGBoost",
+  "best_calibrated_brier": 0.10833466362424672,
+  "minimum_subgroup_auc": 0.6125981170228958,
+  "subgroup_auc_range": 0.3162585072965235,
+  "expanded_model_status": "REJECTED_FOR_LEAKAGE",
+  "final_provenance_requirement": "Confirm prediction-time availability of review features."
+}

@@ -1,0 +1,4 @@
+model,decision,reason
+Model 0 — Logistic Baseline,BASELINE,Retained as interpretable benchmark; not selected as final predictive model.
+Model 1 — Conservative XGBoost,CANDIDATE_FINAL,"Structurally eligible feature set and materially lower performance than the leaked expanded model, indicating the extreme performance gap is not being used as evidence of model quality."
+Model 2 — Expanded XGBoost,REJECT,ROC-AUC approximately 0.9998 combined with single-feature AUC of 1.0 for risk_grade_numeric indicates target/proxy leakage.

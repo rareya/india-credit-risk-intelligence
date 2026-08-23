@@ -1,0 +1,11 @@
+{
+  "audit_name": "prediction_time_provenance",
+  "total_features_audited": 30,
+  "features_pass": 30,
+  "features_review": 0,
+  "features_fail": 0,
+  "features_missing_from_gold": 0,
+  "features_with_declared_future_dependency": 0,
+  "overall_status": "PASS",
+  "governance_interpretation": "PASS means all conservative features passed the automated prediction-time provenance screen. This does not constitute independent verification of a production data feed."
+}

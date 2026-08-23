@@ -1,0 +1,20 @@
+{
+  "base_model": "Conservative XGBoost",
+  "model_version": "conservative_xgb_v1",
+  "feature_count": 30,
+  "calibration_methods_tested": [
+    "None",
+    "Sigmoid / Platt",
+    "Isotonic"
+  ],
+  "best_calibration_method": "Base Conservative XGBoost",
+  "best_brier_score": 0.10845091059130954,
+  "base_brier_score": 0.10845091059130954,
+  "base_roc_auc": 0.8936357656551484,
+  "sigmoid_brier_score": 0.10847119553700071,
+  "isotonic_brier_score": 0.1087790607627195,
+  "training_rows": 35934,
+  "calibration_rows": 7701,
+  "test_rows": 7701,
+  "note": "The Conservative XGBoost model was selected before this calibration analysis. Calibration methods were evaluated only to determine whether probability outputs should be adjusted."
+}

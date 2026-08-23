@@ -1,0 +1,31 @@
+feature,exists_in_gold,exists_in_registry,policy_defined,feature_category,expected_availability,uses_future_information,available_at_prediction,provenance_status,review_required,review_reason,dtype,n_rows,n_missing,missing_pct,n_unique
+delinquency_score,True,True,True,DERIVED_HISTORICAL,Before prediction,False,True,PASS,False,Historical repayment/delinquency behavior can be available before the current credit decision.,int64,51336,0,0.0,289
+num_times_delinquent,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Counts historical delinquency events.,int64,51336,0,0.0,64
+num_times_30p_dpd,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Counts historical 30+ day delinquency events.,int64,51336,0,0.0,52
+num_times_60p_dpd,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Counts historical 60+ day delinquency events.,int64,51336,0,0.0,43
+total_missed_payments,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Historical missed payments are available if calculated only from records existing before scoring.,int64,51336,0,0.0,22
+missed_payment_ratio,True,True,True,DERIVED_HISTORICAL,Before prediction,False,True,PASS,False,Derived from historical missed-payment behavior.,float64,51336,0,0.0,319
+monthly_income_inr,True,True,True,CURRENT_APPLICATION,At application/scoring,False,True,PASS,False,Current borrower income is normally available during credit assessment.,int64,51336,0,0.0,1316
+income_tier,True,True,True,CURRENT_APPLICATION,At application/scoring,False,True,PASS,False,Derived from current income information.,object,51336,0,0.0,5
+total_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing loan count should be available from borrower credit records.,int64,51336,0,0.0,107
+active_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Current active loans should be known at scoring.,int64,51336,0,0.0,32
+closed_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Previously closed loans are historical borrower information.,int64,51336,0,0.0,100
+active_loan_ratio,True,True,True,DERIVED_HISTORICAL,Before prediction,False,True,PASS,False,Derived from active and total existing loans.,float64,51336,0,0.0,503
+loan_type_diversity,True,True,True,DERIVED_HISTORICAL,Before prediction,False,True,PASS,False,Derived from existing borrower loan types.,int8,51336,0,0.0,7
+gold_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing gold-loan information should be available from borrower records.,int64,51336,0,0.0,97
+home_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing home-loan information should be available from borrower records.,int64,51336,0,0.0,9
+personal_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing personal-loan information should be available.,int64,51336,0,0.0,21
+credit_card_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing credit-card loan information should be available.,int64,51336,0,0.0,15
+auto_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing auto-loan information should be available.,int64,51336,0,0.0,17
+secured_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing secured-loan information should be available.,int64,51336,0,0.0,103
+unsecured_loans,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Existing unsecured-loan information should be available.,int64,51336,0,0.0,49
+age,True,True,True,DEMOGRAPHIC,At application/scoring,False,True,PASS,False,Age is available from borrower identity/application information.,int64,51336,0,0.0,47
+gender,True,True,True,DEMOGRAPHIC,At application/scoring,False,True,PASS,False,Gender is treated here as an application-time attribute.,object,51336,0,0.0,2
+education,True,True,True,DEMOGRAPHIC,At application/scoring,False,True,PASS,False,Education information can be available during application.,object,51336,0,0.0,6
+marital_status,True,True,True,DEMOGRAPHIC,At application/scoring,False,True,PASS,False,Marital status is treated as an application-time attribute.,object,51336,0,0.0,2
+age_band,True,True,True,DERIVED_HISTORICAL,At application/scoring,False,True,PASS,False,Derived from age and therefore available at scoring.,object,51336,0,0.0,5
+credit_history_months,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Credit-history duration is historical information.,float64,51336,40,0.0779,294
+has_gold_loan,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Indicator should represent an existing/historical loan.,bool,51336,0,0.0,2
+has_home_loan,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Indicator should represent an existing/historical loan.,bool,51336,0,0.0,2
+has_personal_loan,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Indicator should represent an existing/historical loan.,bool,51336,0,0.0,2
+has_credit_card,True,True,True,HISTORICAL_BEHAVIOR,Before prediction,False,True,PASS,False,Indicator should represent an existing credit relationship.,bool,51336,0,0.0,2
