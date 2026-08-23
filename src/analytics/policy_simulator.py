@@ -1,54 +1,58 @@
 """
-policy_simulator.py — Underwriting Policy What-If Simulator
-────────────────────────────────────────────────────────────────────
-Allows credit risk teams to test policy changes and see the
-impact on approval rates, expected losses, and default prevention
-BEFORE rolling out changes.
+policy_simulator.py
 
-This is the key feature that differentiates a DA/BA platform
-from a generic ML notebook.
-────────────────────────────────────────────────────────────────────
+Underwriting policy what-if simulator.
+
+The simulator estimates the effect of different approval policies
+on the historical borrower population.
+
+IMPORTANT:
+This is retrospective simulation, NOT causal evidence.
+
+Expected loss is model-based:
+
+    EL = predicted_PD × LGD × EAD
+
+LGD and EAD are assumptions/proxies unless observed recovery and
+exposure-at-default data are available.
 """
 
-import pandas as pd
-import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
-LGD      = 0.45
-EAD_MULT = 12
+import numpy as np
+import pandas as pd
+
+from src.analytics.expected_loss import (
+    DEFAULT_EAD_MULTIPLIER,
+    DEFAULT_LGD,
+    expected_loss,
+)
 
 
 @dataclass
 class PolicyConfig:
-    """
-    Encapsulates a set of underwriting policy rules.
-    Default values = current policy (no extra restrictions).
-    """
-    # Enquiry-based rule (Policy 1)
-    max_enq_6m: int = 999              # reject if enq_L6m > this
 
-    # Thin-file rule (Policy 2)
-    min_credit_history_months: int = 0 # reject if Age_Oldest_TL < this
+    max_enq_6m: int = 999
 
-    # Delinquency rules
-    max_delinquencies: int = 999       # reject if num_times_delinquent > this
-    max_60dpd: int = 999               # reject if num_times_60p_dpd > this
+    min_credit_history_months: int = 0
 
-    # Income floor
-    min_monthly_income: float = 0      # reject if NETMONTHLYINCOME < this
+    max_delinquencies: int = 999
 
-    # Model score cutoff
-    max_predicted_pd: float = 1.0     # reject if predicted PD > this (0–1)
+    max_60dpd: int = 999
 
-    # Active loan cap
-    max_active_loan_ratio: float = 1.0 # reject if active_loan_ratio > this
+    min_monthly_income: float = 0
+
+    max_predicted_pd: float = 1.0
+
+    max_active_loan_ratio: float = 1.0
 
     name: str = "Custom Policy"
 
 
-# ── Pre-defined policy presets ────────────────────────────────────────────────
-CURRENT_POLICY = PolicyConfig(name="Current Policy (No Restrictions)")
+CURRENT_POLICY = PolicyConfig(
+    name="Current Policy"
+)
 
 CONSERVATIVE_POLICY = PolicyConfig(
     max_enq_6m=3,
@@ -57,7 +61,7 @@ CONSERVATIVE_POLICY = PolicyConfig(
     max_60dpd=0,
     min_monthly_income=10000,
     max_predicted_pd=0.45,
-    name="Conservative Policy"
+    name="Conservative Policy",
 )
 
 MODEL_B_POLICY = PolicyConfig(
@@ -65,193 +69,549 @@ MODEL_B_POLICY = PolicyConfig(
     min_credit_history_months=24,
     max_delinquencies=5,
     max_predicted_pd=0.50,
-    name="Model B Recommended (3 Policies)"
+    name="Model B Recommended",
 )
 
 AGGRESSIVE_GROWTH_POLICY = PolicyConfig(
-    max_enq_6m=999,
-    min_credit_history_months=0,
     max_predicted_pd=0.65,
-    name="Growth Mode (Relaxed)"
+    name="Growth Mode",
 )
 
 
-def apply_policy(df: pd.DataFrame,
-                 pred_proba: np.ndarray,
-                 policy: PolicyConfig) -> pd.Series:
-    """
-    Apply a policy config to a borrower dataset.
-    Returns a boolean Series: True = APPROVED, False = REJECTED.
-    """
-    n = len(df)
-    approved = pd.Series([True] * n, index=df.index)
+def apply_policy(
+    df: pd.DataFrame,
+    predicted_pd,
+    policy: PolicyConfig,
+):
 
-    # Rule 1: Enquiry cap
+    approved = pd.Series(
+        True,
+        index=df.index,
+    )
+
     if "enq_L6m" in df.columns:
-        approved &= df["enq_L6m"] <= policy.max_enq_6m
 
-    # Rule 2: Credit history floor
+        approved &= (
+            df["enq_L6m"]
+            .fillna(0)
+            <= policy.max_enq_6m
+        )
+
     if "Age_Oldest_TL" in df.columns:
-        approved &= df["Age_Oldest_TL"] >= policy.min_credit_history_months
 
-    # Rule 3: Delinquency cap
+        approved &= (
+            df["Age_Oldest_TL"]
+            .fillna(0)
+            >= policy.min_credit_history_months
+        )
+
     if "num_times_delinquent" in df.columns:
-        approved &= df["num_times_delinquent"] <= policy.max_delinquencies
 
-    # Rule 4: 60+ DPD cap
+        approved &= (
+            df["num_times_delinquent"]
+            .fillna(0)
+            <= policy.max_delinquencies
+        )
+
     if "num_times_60p_dpd" in df.columns:
-        approved &= df["num_times_60p_dpd"] <= policy.max_60dpd
 
-    # Rule 5: Income floor
+        approved &= (
+            df["num_times_60p_dpd"]
+            .fillna(0)
+            <= policy.max_60dpd
+        )
+
     if "NETMONTHLYINCOME" in df.columns:
-        approved &= df["NETMONTHLYINCOME"].fillna(0) >= policy.min_monthly_income
 
-    # Rule 6: Model score cutoff (the most powerful rule)
-    approved &= pd.Series(pred_proba <= policy.max_predicted_pd, index=df.index)
+        approved &= (
+            df["NETMONTHLYINCOME"]
+            .fillna(0)
+            >= policy.min_monthly_income
+        )
 
-    # Rule 7: Active loan ratio cap
+    predicted_pd = pd.Series(
+        predicted_pd,
+        index=df.index,
+    )
+
+    approved &= (
+        predicted_pd
+        <= policy.max_predicted_pd
+    )
+
     if "active_loan_ratio" in df.columns:
-        approved &= df["active_loan_ratio"] <= policy.max_active_loan_ratio
+
+        approved &= (
+            df["active_loan_ratio"]
+            .fillna(0)
+            <= policy.max_active_loan_ratio
+        )
 
     return approved
 
 
-def simulate_policy(df: pd.DataFrame,
-                    pred_proba: np.ndarray,
-                    policy: PolicyConfig,
-                    baseline_policy: Optional[PolicyConfig] = None) -> dict:
-    """
-    Simulate the effect of a policy on the full borrower population.
+def simulate_policy(
+    df,
+    predicted_pd,
+    policy,
+    baseline_policy: Optional[
+        PolicyConfig
+    ] = None,
+    lgd=DEFAULT_LGD,
+    ead_multiplier=DEFAULT_EAD_MULTIPLIER,
+):
 
-    Returns a dict with:
-      - approval_rate, rejection_rate
-      - defaults_in_approved (false negatives)
-      - defaults_prevented (risky borrowers correctly rejected)
-      - approvals_lost (safe borrowers incorrectly rejected)
-      - expected_loss before/after
-      - segment impact
-    """
-    n = len(df)
-    actual_defaults = df["default_risk"].values if "default_risk" in df.columns else np.zeros(n)
+    predicted_pd = pd.Series(
+        predicted_pd,
+        index=df.index,
+        dtype=float,
+    )
 
-    # Apply policies
-    approved = apply_policy(df, pred_proba, policy)
-    if baseline_policy is not None:
-        baseline_approved = apply_policy(df, pred_proba, baseline_policy)
+    if "risk_target" in df.columns:
+
+        actual_risk = (
+            df["risk_target"]
+            .fillna(0)
+            .astype(int)
+        )
+
+    elif "default_risk" in df.columns:
+
+        actual_risk = (
+            df["default_risk"]
+            .fillna(0)
+            .astype(int)
+        )
+
     else:
-        baseline_approved = pd.Series([True] * n, index=df.index)
 
-    # Core counts
-    n_approved   = approved.sum()
-    n_rejected   = (~approved).sum()
+        raise ValueError(
+            "risk_target/default_risk missing."
+        )
 
-    # Among approved: how many are actually risky?
-    defaults_in_approved = int((actual_defaults[approved]).sum())
-    safe_in_approved     = int(((1 - actual_defaults)[approved]).sum())
+    approved = apply_policy(
+        df,
+        predicted_pd,
+        policy,
+    )
 
-    # Among rejected: how many are risky (correctly caught)?
-    defaults_prevented  = int((actual_defaults[~approved]).sum())
-    safe_rejected       = int(((1 - actual_defaults)[~approved]).sum())  # false positives
+    if baseline_policy is None:
 
-    # Expected Loss calculation
-    ead = (df["NETMONTHLYINCOME"].fillna(df["NETMONTHLYINCOME"].median()) * EAD_MULT
-           if "NETMONTHLYINCOME" in df.columns else pd.Series(np.ones(n) * 300000))
+        baseline_approved = pd.Series(
+            True,
+            index=df.index,
+        )
 
-    el_all      = (pred_proba * LGD * ead)
-    el_approved = el_all[approved].sum()
-    el_baseline = el_all[baseline_approved].sum()
+    else:
 
-    # Baseline stats for comparison
-    baseline_approval_rate  = baseline_approved.mean()
-    baseline_defaults_in_approved = int((actual_defaults[baseline_approved]).sum())
-    baseline_el = el_all[baseline_approved].sum()
+        baseline_approved = apply_policy(
+            df,
+            predicted_pd,
+            baseline_policy,
+        )
+
+    n = len(df)
+
+    approved_count = int(
+        approved.sum()
+    )
+
+    rejected_count = (
+        n - approved_count
+    )
+
+    risky_approved = int(
+        (
+            actual_risk[approved] == 1
+        ).sum()
+    )
+
+    risky_rejected = int(
+        (
+            actual_risk[~approved] == 1
+        ).sum()
+    )
+
+    safe_rejected = int(
+        (
+            actual_risk[~approved] == 0
+        ).sum()
+    )
+
+    safe_approved = int(
+        (
+            actual_risk[approved] == 0
+        ).sum()
+    )
+
+    ead = (
+        df["NETMONTHLYINCOME"]
+        .fillna(
+            df["NETMONTHLYINCOME"].median()
+        )
+        .clip(lower=0)
+        * ead_multiplier
+        if "NETMONTHLYINCOME" in df.columns
+        else pd.Series(
+            300000,
+            index=df.index,
+        )
+    )
+
+    expected_loss_all = expected_loss(
+        predicted_pd,
+        ead,
+        lgd,
+    )
+
+    expected_loss_all = pd.Series(
+        expected_loss_all,
+        index=df.index,
+    )
+
+    policy_loss = float(
+        expected_loss_all[
+            approved
+        ].sum()
+    )
+
+    baseline_loss = float(
+        expected_loss_all[
+            baseline_approved
+        ].sum()
+    )
+
+    baseline_approved_count = int(
+        baseline_approved.sum()
+    )
+
+    baseline_risky_approved = int(
+        (
+            actual_risk[
+                baseline_approved
+            ] == 1
+        ).sum()
+    )
 
     return {
-        "policy_name":           policy.name,
-        "n_total":               n,
 
-        # Approvals
-        "n_approved":            int(n_approved),
-        "approval_rate_pct":     round(n_approved / n * 100, 1),
-        "n_rejected":            int(n_rejected),
-        "rejection_rate_pct":    round(n_rejected / n * 100, 1),
+        "policy_name":
+            policy.name,
 
-        # Default outcomes
-        "defaults_in_approved":  defaults_in_approved,
-        "default_rate_in_approved_pct": round(defaults_in_approved / max(n_approved,1) * 100, 1),
-        "defaults_prevented":    defaults_prevented,
-        "safe_borrowers_rejected": safe_rejected,
+        "n_total":
+            n,
 
-        # vs baseline
-        "defaults_prevented_vs_baseline": defaults_prevented - (n - baseline_approved.sum()),
-        "approvals_lost_vs_baseline": int(baseline_approved.sum()) - int(n_approved),
+        "n_approved":
+            approved_count,
 
-        # Expected Loss
-        "expected_loss_cr":      round(el_approved / 1e7, 2),
-        "baseline_el_cr":        round(baseline_el / 1e7, 2),
-        "el_reduction_cr":       round((baseline_el - el_approved) / 1e7, 2),
-        "el_reduction_pct":      round((baseline_el - el_approved) / max(baseline_el, 1) * 100, 1),
+        "approval_rate_pct":
+            round(
+                approved_count / max(n, 1)
+                * 100,
+                2,
+            ),
+
+        "n_rejected":
+            rejected_count,
+
+        "rejection_rate_pct":
+            round(
+                rejected_count / max(n, 1)
+                * 100,
+                2,
+            ),
+
+        "risky_borrowers_approved":
+            risky_approved,
+
+        "risky_borrowers_rejected":
+            risky_rejected,
+
+        "safe_borrowers_rejected":
+            safe_rejected,
+
+        "safe_borrowers_approved":
+            safe_approved,
+
+        "risk_rate_in_approved_pct":
+            round(
+                risky_approved
+                / max(approved_count, 1)
+                * 100,
+                2,
+            ),
+
+        "risk_capture_rate_pct":
+            round(
+                risky_rejected
+                / max(
+                    int(actual_risk.sum()),
+                    1,
+                )
+                * 100,
+                2,
+            ),
+
+        "expected_loss":
+            policy_loss,
+
+        "baseline_expected_loss":
+            baseline_loss,
+
+        "expected_loss_reduction":
+            baseline_loss - policy_loss,
+
+        "expected_loss_reduction_pct":
+            round(
+                (
+                    baseline_loss
+                    - policy_loss
+                )
+                / max(
+                    baseline_loss,
+                    1e-9,
+                )
+                * 100,
+                2,
+            ),
+
+        "approvals_lost_vs_baseline":
+            baseline_approved_count
+            - approved_count,
+
+        "risky_borrowers_avoided_vs_baseline":
+            baseline_risky_approved
+            - risky_approved,
+
+        "lgd_assumption":
+            lgd,
+
+        "ead_multiplier":
+            ead_multiplier,
+
+        "interpretation":
+            (
+                "Retrospective model-based simulation; "
+                "not causal evidence of future loss reduction."
+            ),
     }
 
 
-def threshold_sensitivity_table(df: pd.DataFrame,
-                                  pred_proba: np.ndarray) -> pd.DataFrame:
-    """
-    The threshold trade-off table — a key differentiator.
-    Shows what happens at each decision threshold.
-    """
-    actual = df["default_risk"].values if "default_risk" in df.columns else np.zeros(len(df))
-    n      = len(df)
+def threshold_sensitivity_table(
+    df,
+    predicted_pd,
+):
 
     rows = []
-    for thresh in [0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]:
-        predicted_risky = pred_proba >= thresh
-        approved        = ~predicted_risky
 
-        tp = int(((predicted_risky) & (actual == 1)).sum())  # risky caught
-        fp = int(((predicted_risky) & (actual == 0)).sum())  # safe rejected
-        fn = int(((~predicted_risky) & (actual == 1)).sum()) # risky missed
-        tn = int(((~predicted_risky) & (actual == 0)).sum()) # safe approved
+    if "risk_target" in df.columns:
 
-        precision = tp / max(tp + fp, 1)
-        recall    = tp / max(tp + fn, 1)
-        f1        = 2 * precision * recall / max(precision + recall, 1e-6)
+        actual = (
+            df["risk_target"]
+            .fillna(0)
+            .astype(int)
+            .values
+        )
+
+    else:
+
+        actual = (
+            df["default_risk"]
+            .fillna(0)
+            .astype(int)
+            .values
+        )
+
+    predicted_pd = np.asarray(
+        predicted_pd
+    )
+
+    for threshold in np.arange(
+        0.20,
+        0.81,
+        0.01,
+    ):
+
+        risky_flag = (
+            predicted_pd
+            >= threshold
+        )
+
+        approved = ~risky_flag
+
+        tp = int(
+            (
+                risky_flag
+                & (actual == 1)
+            ).sum()
+        )
+
+        fp = int(
+            (
+                risky_flag
+                & (actual == 0)
+            ).sum()
+        )
+
+        fn = int(
+            (
+                approved
+                & (actual == 1)
+            ).sum()
+        )
+
+        tn = int(
+            (
+                approved
+                & (actual == 0)
+            ).sum()
+        )
+
+        precision = (
+            tp / max(tp + fp, 1)
+        )
+
+        recall = (
+            tp / max(tp + fn, 1)
+        )
+
+        f1 = (
+            2
+            * precision
+            * recall
+            / max(
+                precision + recall,
+                1e-9,
+            )
+        )
 
         rows.append({
-            "Threshold":            thresh,
-            "Approval Rate %":      round(approved.mean() * 100, 1),
-            "Defaults Caught %":    round(recall * 100, 1),       # recall
-            "False Alarm Rate %":   round(fp / max(fp + tp, 1) * 100, 1),
-            "Precision %":          round(precision * 100, 1),
-            "F1 Score":             round(f1, 3),
-            "Defaults Missed":      fn,
-            "Safe Borrowers Rejected": fp,
+
+            "threshold":
+                round(
+                    float(threshold),
+                    2,
+                ),
+
+            "approval_rate_pct":
+                round(
+                    approved.mean()
+                    * 100,
+                    2,
+                ),
+
+            "precision":
+                round(
+                    precision,
+                    4,
+                ),
+
+            "recall":
+                round(
+                    recall,
+                    4,
+                ),
+
+            "f1":
+                round(
+                    f1,
+                    4,
+                ),
+
+            "true_positive":
+                tp,
+
+            "false_positive":
+                fp,
+
+            "false_negative":
+                fn,
+
+            "true_negative":
+                tn,
         })
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(
+        rows
+    )
 
 
-def compare_policies(df: pd.DataFrame,
-                     pred_proba: np.ndarray,
-                     policies: list) -> pd.DataFrame:
-    """
-    Compare multiple PolicyConfig objects side by side.
-    Returns a wide comparison DataFrame.
-    """
+def compare_policies(
+    df,
+    predicted_pd,
+    policies,
+):
+
     rows = []
-    baseline = policies[0] if policies else CURRENT_POLICY
+
+    baseline = (
+        policies[0]
+        if policies
+        else CURRENT_POLICY
+    )
 
     for policy in policies:
-        result = simulate_policy(df, pred_proba, policy,
-                                  baseline_policy=baseline)
+
+        result = simulate_policy(
+            df,
+            predicted_pd,
+            policy,
+            baseline_policy=baseline,
+        )
+
         rows.append({
-            "Policy":            result["policy_name"],
-            "Approval Rate %":   result["approval_rate_pct"],
-            "Default Rate in Approved %": result["default_rate_in_approved_pct"],
-            "Defaults Prevented": result["defaults_prevented"],
-            "Safe Rejected":     result["safe_borrowers_rejected"],
-            "Expected Loss (₹ Cr)": result["expected_loss_cr"],
-            "EL Reduction (₹ Cr)":  result["el_reduction_cr"],
+            "policy":
+                result["policy_name"],
+
+            "approval_rate_pct":
+                result["approval_rate_pct"],
+
+            "risk_rate_in_approved_pct":
+                result[
+                    "risk_rate_in_approved_pct"
+                ],
+
+            "risk_capture_rate_pct":
+                result[
+                    "risk_capture_rate_pct"
+                ],
+
+            "risky_borrowers_avoided":
+                result[
+                    "risky_borrowers_avoided_vs_baseline"
+                ],
+
+            "safe_borrowers_rejected":
+                result[
+                    "safe_borrowers_rejected"
+                ],
+
+            "expected_loss":
+                result[
+                    "expected_loss"
+                ],
+
+            "expected_loss_reduction":
+                result[
+                    "expected_loss_reduction"
+                ],
+
+            "expected_loss_reduction_pct":
+                result[
+                    "expected_loss_reduction_pct"
+                ],
+
+            "lgd_assumption":
+                result[
+                    "lgd_assumption"
+                ],
+
+            "interpretation":
+                result[
+                    "interpretation"
+                ],
         })
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(
+        rows
+    )
