@@ -1,124 +1,114 @@
 """
 cross_validate.py
 
-5-fold stratified cross-validation for Conservative XGBoost.
+5-fold stratified cross-validation for the SELECTED
+Conservative XGBoost model.
 
-Uses ONLY the conservative feature registry.
+IMPORTANT:
+    This is NOT model selection.
+
+    Conservative XGBoost has already been selected.
+
+    This script evaluates:
+        - stability
+        - variance
+        - generalization consistency
+        - probability quality
+
+    across five independent stratified folds.
 """
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
-from sklearn.compose import ColumnTransformer
-from sklearn.impute import SimpleImputer
 from sklearn.metrics import (
     roc_auc_score,
     average_precision_score,
     brier_score_loss,
 )
 from sklearn.model_selection import StratifiedKFold
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder
-from xgboost import XGBClassifier
 
-from feature_registry import (
-    TARGET,
-    CONSERVATIVE_FEATURES,
-    validate_registry,
+from final_model_config import (
+    MODEL_NAME,
+    RANDOM_STATE,
+    FEATURES,
+    TARGET_COLUMN,
+    build_xgb_model,
+    load_gold_data,
 )
 
+
+# ============================================================
+# PATHS
+# ============================================================
+
 GOLD_DIR = Path("data/gold/exports")
-OUTPUT_DIR = GOLD_DIR / "analytics" / "ml" / "cross_validation"
 
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR = (
+    GOLD_DIR /
+    "analytics" /
+    "ml" /
+    "cross_validation"
+)
+
+OUTPUT_DIR.mkdir(
+    parents=True,
+    exist_ok=True
+)
 
 
-RANDOM_STATE = 42
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
 N_SPLITS = 5
 
 
-def load_data():
-
-    df = pd.read_parquet(
-        GOLD_DIR / "fact_credit_risk.parquet"
-    )
-
-    validate_registry(df.columns)
-
-    return df
-
-
-def build_pipeline(X):
-
-    categorical = [
-        c for c in X.columns
-        if X[c].dtype == "object"
-    ]
-
-    numeric = [
-        c for c in X.columns
-        if c not in categorical
-    ]
-
-    numeric_pipe = Pipeline([
-        (
-            "imputer",
-            SimpleImputer(strategy="median"),
-        )
-    ])
-
-    categorical_pipe = Pipeline([
-        (
-            "imputer",
-            SimpleImputer(strategy="most_frequent"),
-        ),
-        (
-            "encoder",
-            OneHotEncoder(
-                handle_unknown="ignore",
-                sparse_output=False,
-            ),
-        ),
-    ])
-
-    preprocessor = ColumnTransformer([
-        ("numeric", numeric_pipe, numeric),
-        ("categorical", categorical_pipe, categorical),
-    ])
-
-    model = XGBClassifier(
-        n_estimators=300,
-        max_depth=4,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        objective="binary:logistic",
-        eval_metric="logloss",
-        random_state=RANDOM_STATE,
-        n_jobs=-1,
-    )
-
-    return Pipeline([
-        ("preprocessor", preprocessor),
-        ("model", model),
-    ])
-
+# ============================================================
+# MAIN
+# ============================================================
 
 def main():
 
     print("=" * 70)
-    print("  INDIA CREDIT RISK — 5-FOLD CROSS-VALIDATION")
+    print(
+        "  INDIA CREDIT RISK — "
+        "5-FOLD CROSS-VALIDATION"
+    )
     print("=" * 70)
 
-    df = load_data()
+    print(
+        f"\nModel: {MODEL_NAME}"
+    )
 
-    X = df[CONSERVATIVE_FEATURES]
-    y = df[TARGET].astype(int)
+    print(
+        f"Features: {len(FEATURES)}"
+    )
 
-    print(f"\nFeatures: {len(CONSERVATIVE_FEATURES)}")
-    print(f"Rows: {len(df):,}")
+    print(
+        f"Target: {TARGET_COLUMN}"
+    )
+
+    # --------------------------------------------------------
+    # Load data
+    # --------------------------------------------------------
+
+    df = load_gold_data()
+
+    X = df[FEATURES].copy()
+
+    y = df[
+        TARGET_COLUMN
+    ].astype(int)
+
+    print(
+        f"Rows: {len(df):,}"
+    )
+
+    # --------------------------------------------------------
+    # CV definition
+    # --------------------------------------------------------
 
     cv = StratifiedKFold(
         n_splits=N_SPLITS,
@@ -128,97 +118,245 @@ def main():
 
     results = []
 
-    for fold, (train_idx, test_idx) in enumerate(
+    # --------------------------------------------------------
+    # Fold loop
+    # --------------------------------------------------------
+
+    for fold, (
+        train_idx,
+        test_idx
+    ) in enumerate(
         cv.split(X, y),
         start=1,
     ):
 
-        print(f"\n━━━ Fold {fold}/{N_SPLITS} ━━━")
+        print(
+            f"\n{'━' * 70}"
+        )
 
-        X_train = X.iloc[train_idx]
-        X_test = X.iloc[test_idx]
+        print(
+            f"Fold {fold}/{N_SPLITS}"
+        )
 
-        y_train = y.iloc[train_idx]
-        y_test = y.iloc[test_idx]
+        print(
+            f"{'━' * 70}"
+        )
 
-        pipeline = build_pipeline(X_train)
+        X_train = X.iloc[
+            train_idx
+        ]
 
-        pipeline.fit(X_train, y_train)
+        X_test = X.iloc[
+            test_idx
+        ]
 
-        probabilities = pipeline.predict_proba(X_test)[:, 1]
+        y_train = y.iloc[
+            train_idx
+        ]
 
-        auc = roc_auc_score(
+        y_test = y.iloc[
+            test_idx
+        ]
+
+        print(
+            f"  Training rows: {len(X_train):,}"
+        )
+
+        print(
+            f"  Testing rows:  {len(X_test):,}"
+        )
+
+        # ----------------------------------------------------
+        # Build exact selected model
+        # ----------------------------------------------------
+
+        model = build_xgb_model(
+            X_train
+        )
+
+        print(
+            "\n  Training..."
+        )
+
+        model.fit(
+            X_train,
+            y_train
+        )
+
+        print(
+            "  ✓ Training complete"
+        )
+
+        # ----------------------------------------------------
+        # Predictions
+        # ----------------------------------------------------
+
+        probabilities = (
+            model.predict_proba(
+                X_test
+            )[:, 1]
+        )
+
+        # ----------------------------------------------------
+        # Metrics
+        # ----------------------------------------------------
+
+        roc_auc = roc_auc_score(
             y_test,
-            probabilities,
+            probabilities
         )
 
         pr_auc = average_precision_score(
             y_test,
-            probabilities,
+            probabilities
         )
 
         brier = brier_score_loss(
             y_test,
-            probabilities,
+            probabilities
         )
 
         results.append({
+            "model": MODEL_NAME,
             "fold": fold,
-            "roc_auc": auc,
+            "roc_auc": roc_auc,
             "pr_auc": pr_auc,
             "brier_score": brier,
             "train_rows": len(train_idx),
             "test_rows": len(test_idx),
         })
 
-        print(f"  ROC-AUC: {auc:.4f}")
-        print(f"  PR-AUC:  {pr_auc:.4f}")
-        print(f"  Brier:   {brier:.4f}")
+        print(
+            f"\n  ROC-AUC: {roc_auc:.4f}"
+        )
 
-    results_df = pd.DataFrame(results)
+        print(
+            f"  PR-AUC:  {pr_auc:.4f}"
+        )
 
-    summary = pd.DataFrame([{
-        "metric": "roc_auc",
-        "mean": results_df.roc_auc.mean(),
-        "std": results_df.roc_auc.std(ddof=1),
-        "min": results_df.roc_auc.min(),
-        "max": results_df.roc_auc.max(),
-    }, {
-        "metric": "pr_auc",
-        "mean": results_df.pr_auc.mean(),
-        "std": results_df.pr_auc.std(ddof=1),
-        "min": results_df.pr_auc.min(),
-        "max": results_df.pr_auc.max(),
-    }, {
-        "metric": "brier_score",
-        "mean": results_df.brier_score.mean(),
-        "std": results_df.brier_score.std(ddof=1),
-        "min": results_df.brier_score.min(),
-        "max": results_df.brier_score.max(),
-    }])
+        print(
+            f"  Brier:   {brier:.4f}"
+        )
 
-    results_df.to_parquet(
-        OUTPUT_DIR / "cv_fold_results.parquet",
-        index=False,
+    # --------------------------------------------------------
+    # Results dataframe
+    # --------------------------------------------------------
+
+    results_df = pd.DataFrame(
+        results
     )
 
-    summary.to_parquet(
-        OUTPUT_DIR / "cv_summary.parquet",
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
+
+    summary = pd.DataFrame([
+        {
+            "model": MODEL_NAME,
+            "metric": "roc_auc",
+            "mean":
+                results_df["roc_auc"].mean(),
+            "std":
+                results_df["roc_auc"].std(
+                    ddof=1
+                ),
+            "min":
+                results_df["roc_auc"].min(),
+            "max":
+                results_df["roc_auc"].max(),
+        },
+        {
+            "model": MODEL_NAME,
+            "metric": "pr_auc",
+            "mean":
+                results_df["pr_auc"].mean(),
+            "std":
+                results_df["pr_auc"].std(
+                    ddof=1
+                ),
+            "min":
+                results_df["pr_auc"].min(),
+            "max":
+                results_df["pr_auc"].max(),
+        },
+        {
+            "model": MODEL_NAME,
+            "metric": "brier_score",
+            "mean":
+                results_df["brier_score"].mean(),
+            "std":
+                results_df["brier_score"].std(
+                    ddof=1
+                ),
+            "min":
+                results_df["brier_score"].min(),
+            "max":
+                results_df["brier_score"].max(),
+        },
+    ])
+
+    # --------------------------------------------------------
+    # Save
+    # --------------------------------------------------------
+
+    results_df.to_parquet(
+        OUTPUT_DIR /
+        "cv_fold_results.parquet",
         index=False,
     )
 
     results_df.to_csv(
-        OUTPUT_DIR / "cv_fold_results.csv",
+        OUTPUT_DIR /
+        "cv_fold_results.csv",
         index=False,
     )
 
-    print("\n" + "=" * 70)
-    print("CROSS-VALIDATION SUMMARY")
-    print("=" * 70)
+    summary.to_parquet(
+        OUTPUT_DIR /
+        "cv_summary.parquet",
+        index=False,
+    )
 
-    print(summary.to_string(index=False))
+    summary.to_csv(
+        OUTPUT_DIR /
+        "cv_summary.csv",
+        index=False,
+    )
 
-    print("\n✓ Cross-validation complete")
+    # --------------------------------------------------------
+    # Print final summary
+    # --------------------------------------------------------
+
+    print(
+        "\n" + "=" * 70
+    )
+
+    print(
+        "CROSS-VALIDATION SUMMARY"
+    )
+
+    print(
+        "=" * 70
+    )
+
+    print(
+        summary.round(4).to_string(
+            index=False
+        )
+    )
+
+    print(
+        "\n✓ Conservative XGBoost "
+        "cross-validation complete"
+    )
+
+    print(
+        "\nSaved to:"
+    )
+
+    print(
+        f"  {OUTPUT_DIR}"
+    )
 
 
 if __name__ == "__main__":
