@@ -1,0 +1,31 @@
+feature,classification,prediction_time_status,reason,dtype,missing_count,missing_pct
+active_loan_ratio,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,float64,0,0.0
+active_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+age,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+auto_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+closed_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+credit_card_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+credit_history_months,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,float64,40,0.078
+delinquency_score,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+education,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,object,0,0.0
+gender,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,object,0,0.0
+gold_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+has_credit_card,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,bool,0,0.0
+has_gold_loan,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,bool,0,0.0
+has_home_loan,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,bool,0,0.0
+has_personal_loan,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,bool,0,0.0
+home_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+income_tier,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,object,0,0.0
+loan_type_diversity,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int8,0,0.0
+marital_status,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,object,0,0.0
+missed_payment_ratio,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,float64,0,0.0
+monthly_income_inr,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+num_times_60p_dpd,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+num_times_delinquent,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+personal_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+recent_enquiries_12m,REVIEW,REQUIRES_DOCUMENTATION,Confirm enquiry information represents bureau information available before the lending decision.,float64,6321,12.313
+recent_enquiries_6m,REVIEW,REQUIRES_DOCUMENTATION,Confirm enquiry information represents bureau information available before the lending decision.,float64,6321,12.313
+secured_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+total_enquiries,REVIEW,REQUIRES_DOCUMENTATION,Confirm enquiry information represents bureau information available before the lending decision.,float64,6321,12.313
+total_missed_payments,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
+unsecured_loans,PROVISIONALLY_SAFE,STRUCTURALLY_ELIGIBLE,No target/proxy classification identified by structural leakage audit. Historical prediction-time availability should still be documented.,int64,0,0.0
