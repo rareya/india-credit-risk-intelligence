@@ -29,7 +29,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import StratifiedKFold
 
-from final_model_config import (
+from src.modeling.final_model_config import (
     MODEL_NAME,
     RANDOM_STATE,
     FEATURES,

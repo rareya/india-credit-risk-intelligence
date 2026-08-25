@@ -36,7 +36,7 @@ from sklearn.metrics import (
     recall_score,
 )
 
-from src.analytics.run_ml_model import (
+from src.modeling.run_ml_model import (
     load_data,
     split_data,
     calculate_scale_pos_weight,

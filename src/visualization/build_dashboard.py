@@ -12,11 +12,15 @@ Design language: JPMorgan / Goldman Sachs internal tools.
 import streamlit as st
 import pandas as pd
 import numpy as np
-import json, pickle, sqlite3
+import json
 from pathlib import Path
 import plotly.graph_objects as go
 import warnings
 warnings.filterwarnings("ignore")
+
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import model_bridge as mb
 
 st.set_page_config(
     page_title="India Credit Risk Intelligence",
@@ -84,86 +88,51 @@ p,li,div{{font-size:13px;}}
 # ── Paths ─────────────────────────────────────────────────────────────────────
 ROOT       = Path(__file__).resolve().parents[2]
 SILVER_DIR = ROOT / "data" / "silver"
-ML_DIR     = ROOT / "data" / "gold" / "exports" / "ml"
-MODEL_DIR  = ROOT / "data" / "processed"
-DB_PATH    = ROOT / "data" / "credit_risk.db"
 LGD        = 0.45
 EAD_MULT   = 12
 
-# ── Data loaders — all use file paths, not DataFrames, for reliable caching ──
+# ── Data loaders — sourced from model_bridge, i.e. the REAL conservative_xgb_v1
+#    pipeline (data/gold/exports/analytics/ml/final/), not the old Model B
+#    pipeline (data/processed/credit_risk_model_v2.pkl,
+#    data/gold/exports/ml/model_metrics.json) this file previously pointed to ──
 @st.cache_data
 def load_silver():
     p = SILVER_DIR / "silver_master.parquet"
     return pd.read_parquet(p) if p.exists() else None
 
 @st.cache_data
-def load_metrics():
-    p = ML_DIR / "model_metrics.json"
-    if p.exists():
-        with open(p) as f: return json.load(f)
-    return {"test_auc":0.8994,"test_precision":0.6907,"test_recall":0.7102,
-            "test_f1":0.7003,"cv_auc_mean":0.8921,"cv_auc_std":0.0038,
-            "confusion_matrix":[[6074,848],[773,2573]],"n_test":10268}
+def load_metadata():
+    return mb.load_model_metadata()
 
 @st.cache_data
-def load_importance():
-    p = ML_DIR / "feature_importance.parquet"
-    if p.exists(): return pd.read_parquet(p)
-    return pd.DataFrame({"feature":["enq_L6m","num_times_delinquent","Age_Oldest_TL",
-        "Total_TL","delinquency_score","active_loan_ratio","enq_L12m","num_times_60p_dpd",
-        "tot_enq","Gold_TL","missed_payment_ratio","NETMONTHLYINCOME","AGE",
-        "loan_type_diversity","Home_TL"],
-        "shap_importance":[1.183,.654,.460,.242,.210,.164,.121,.087,.050,.038,.029,.021,.015,.009,.004]})
-
-@st.cache_data
-def load_roc():
-    p = ML_DIR / "roc_curve.parquet"
-    return pd.read_parquet(p) if p.exists() else None
+def load_predictions_df():
+    return mb.load_predictions()
 
 @st.cache_resource
 def load_model():
-    for f in ["credit_risk_model_v2.pkl","credit_risk_model.pkl"]:
-        p = MODEL_DIR / f
-        if p.exists():
-            with open(p,"rb") as fh: return pickle.load(fh)
-    return None
+    return mb.load_model()
 
 @st.cache_data
-def get_predictions(_df_hash, silver_path):
-    """Use file path as cache key, not the DataFrame itself."""
-    df = load_silver()
-    model = load_model()
-    if model is None or df is None: return None
-    FEATS = ["num_times_delinquent","num_times_60p_dpd","delinquency_score",
-             "missed_payment_ratio","Total_TL","active_loan_ratio","loan_type_diversity",
-             "Age_Oldest_TL","AGE","NETMONTHLYINCOME","enq_L6m","enq_L12m","tot_enq","Gold_TL","Home_TL"]
-    avail = [f for f in FEATS if f in df.columns]
-    X = df[avail].copy()
-    X = X.fillna(X.median(numeric_only=True))
-    # Engineered features — safe column addition
-    cols = X.columns.tolist()
-    if "enq_L6m" in cols and "Age_Oldest_TL" in cols:
-        X = X.assign(enq_per_credit_year=X["enq_L6m"] / (X["Age_Oldest_TL"] / 12 + 1))
-    if "num_times_delinquent" in cols and "Total_TL" in cols:
-        X = X.assign(delinquency_rate=X["num_times_delinquent"] / (X["Total_TL"] + 1))
-    if "enq_L6m" in cols and "enq_L12m" in cols:
-        X = X.assign(enq_acceleration=(X["enq_L6m"] - X["enq_L12m"] / 2).clip(lower=0))
-    if "num_times_60p_dpd" in cols and "num_times_delinquent" in cols:
-        X = X.assign(severe_delinquency_ratio=X["num_times_60p_dpd"] / (X["num_times_delinquent"] + 1))
-    try: return model.predict_proba(X)[:, 1]
-    except Exception as e:
-        st.sidebar.warning(f"Model prediction failed: {e}")
+def get_predictions():
+    """Predicted probability array, row-aligned with load_silver()'s
+    row order (verified: both silver PROSPECTID and gold borrower_id
+    are strictly monotonic 1..N with no gaps -- see model_bridge.py).
+    No live re-scoring here anymore: predictions come pre-computed
+    from score_portfolio.py, so this can't silently drift from the
+    actual trained pipeline the way live feature-reconstruction could."""
+    preds = load_predictions_df()
+    if preds is None:
         return None
+    return preds.sort_values("borrower_id")["predicted_probability"].to_numpy()
+
+@st.cache_resource
+def get_sql_connection():
+    return mb.get_connection()
 
 def run_sql(q):
-    if not DB_PATH.exists(): return pd.DataFrame()
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        df = pd.read_sql_query(q, conn)
-        conn.close()
-        return df
-    except Exception:
-        return pd.DataFrame()
+    con = get_sql_connection()
+    return mb.run_sql(con, q)
+
 
 # ── Chart template ────────────────────────────────────────────────────────────
 def jpm(h=320, title=""):
@@ -235,18 +204,53 @@ def stat_row(items):
 
 # ── Load all data ─────────────────────────────────────────────────────────────
 df          = load_silver()
-metrics     = load_metrics()
-imp         = load_importance()
-roc_df      = load_roc()
-silver_path = str(SILVER_DIR / "silver_master.parquet")
-pred_proba  = get_predictions(silver_path, silver_path) if df is not None else None
-db_ok       = DB_PATH.exists()
+metadata    = load_metadata()
+imp         = mb.load_shap_importance()
+sql_con     = get_sql_connection()
+roc_df      = mb.get_roc_curve(sql_con) if sql_con is not None else None
+pred_proba  = get_predictions()
+db_ok       = mb.duckdb_available()
 model_ok    = load_model() is not None
+
+# Normalized metrics dict — held-out test metrics come from model_metadata.json
+# (the real, current conservative_xgb_v1 numbers); confusion matrix comes from
+# sql/dashboard/confusion_matrix.sql (SQL layer), computed at the real deployed
+# threshold (0.40, model_bridge.OPERATING_THRESHOLD) rather than 0.50.
+_test = metadata.get("held_out_evaluation", {}).get("test_metrics", {})
+_cv = metadata.get("cross_validation_reference", {})
+metrics = {
+    "test_auc":      _test.get("roc_auc"),
+    "test_precision": _test.get("precision_at_0.50"),
+    "test_recall":    _test.get("recall_at_0.50"),
+    "test_f1":        _test.get("f1_at_0.50"),
+    "cv_auc_mean":    _cv.get("mean_roc_auc"),
+    "cv_auc_std":     _cv.get("std_roc_auc"),
+    "n_test":         metadata.get("held_out_evaluation", {}).get("test_rows"),
+    "n_features":     metadata.get("n_features"),
+    "confusion_matrix": mb.get_confusion_matrix(sql_con) if sql_con is not None else None,
+}
+
+# Portfolio KPI strip — sql/dashboard/portfolio_kpis.sql, not pandas/numpy math
+# on the loaded dataframe. Falls back to safe defaults only if DuckDB/SQL layer
+# is unavailable (e.g. score_portfolio.py hasn't been run yet).
+_kpis = mb.get_portfolio_kpis(sql_con) if sql_con is not None else {}
+if _kpis:
+    n        = int(_kpis["n_borrowers"])
+    n_def    = int(_kpis["n_defaults"])
+    def_rate = _kpis["default_rate"]
+    avg_pd   = _kpis["avg_predicted_pd"]
+    hi_risk  = int(_kpis["high_risk_count"])
+    appr_rate = _kpis["approval_rate"]
+    ead_cr   = _kpis["total_ead_crores"]
+    el_cr    = _kpis["expected_loss_crores"]
+else:
+    n, n_def, def_rate, avg_pd, hi_risk, appr_rate, el_cr, ead_cr = \
+        51336, 13334, 0.26, 0.26, 13967, 0.73, 191.8, 1627.8
 
 # ── HEADER ────────────────────────────────────────────────────────────────────
 status_color = GREEN if db_ok else AMBER
-status_text  = "DB CONNECTED" if db_ok else "NO DB — RUN create_database.py"
-model_text   = "MODEL LOADED" if model_ok else "NO MODEL — RUN run_ml_model.py"
+status_text  = "DB CONNECTED" if db_ok else "NO DB — RUN score_portfolio.py"
+model_text   = "MODEL LOADED" if model_ok else "NO MODEL — RUN persist_final_model.py"
 
 st.markdown(f"""
 <div style="background:{NAVY};padding:12px 28px 12px;border-bottom:2px solid {GOLD};
@@ -274,7 +278,7 @@ st.markdown(f"""
     <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:{GREEN if model_ok else AMBER};
                 margin-bottom:2px;">● {model_text}</div>
     <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:{SLATE};">
-      XGBoost v2 &nbsp;·&nbsp; AUC 0.8994 &nbsp;·&nbsp; threshold 0.50
+      Conservative XGBoost v1 &nbsp;·&nbsp; AUC {metrics['test_auc']:.4f} &nbsp;·&nbsp; threshold {mb.OPERATING_THRESHOLD:.2f}
     </div>
   </div>
 </div>
@@ -310,14 +314,13 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
 
     for lbl, val, col in [
-        ("AUC (ROC)",     "0.8994", GREEN),
-        ("Precision",     "69.1 %", GOLD),
-        ("Recall",        "71.0 %", GOLD),
-        ("F1",            "0.700",  WHITE),
-        ("False Alarm",   "31.0 %", RED),
-        ("CV AUC",        "0.892",  GREEN),
-        ("N Features",    "15 raw + 4 eng", SLATE),
-        ("scale_pos_wt",  "1.43",   SLATE),
+        ("AUC (ROC)",     f"{metrics['test_auc']:.4f}" if metrics['test_auc'] else "—", GREEN),
+        ("Precision",     f"{metrics['test_precision']*100:.1f} %" if metrics['test_precision'] else "—", GOLD),
+        ("Recall",        f"{metrics['test_recall']*100:.1f} %" if metrics['test_recall'] else "—", GOLD),
+        ("F1",            f"{metrics['test_f1']:.3f}" if metrics['test_f1'] else "—",  WHITE),
+        ("CV AUC",        f"{metrics['cv_auc_mean']:.4f} ± {metrics['cv_auc_std']:.4f}" if metrics['cv_auc_mean'] else "—", GREEN),
+        ("N Features",    f"{metrics['n_features']} (governed)" if metrics['n_features'] else "—", SLATE),
+        ("Threshold",     f"{mb.OPERATING_THRESHOLD:.2f} (analytical)", SLATE),
     ]:
         st.markdown(f"""
         <div style="display:flex;justify-content:space-between;padding:5px 16px;
@@ -343,25 +346,9 @@ with st.sidebar:
     </div>""", unsafe_allow_html=True)
 
 # ── Derived values ────────────────────────────────────────────────────────────
-if df is not None:
-    n        = len(df)
-    n_def    = int(df["default_risk"].sum())
-    def_rate = n_def / n
-else:
-    n, n_def, def_rate = 51336, 13347, 0.26
-
-if pred_proba is not None:
-    avg_pd    = float(pred_proba.mean())
-    hi_risk   = int((pred_proba >= 0.50).sum())
-    appr_rate = float((pred_proba < 0.50).mean())
-    if df is not None and "NETMONTHLYINCOME" in df.columns:
-        ead    = df["NETMONTHLYINCOME"].fillna(df["NETMONTHLYINCOME"].median()) * EAD_MULT
-        el_cr  = float((pred_proba * LGD * ead).sum() / 1e7)
-        ead_cr = float(ead.sum() / 1e7)
-    else:
-        el_cr, ead_cr = 89.4, 421.0
-else:
-    avg_pd, hi_risk, appr_rate, el_cr, ead_cr = 0.26, 13000, 0.74, 89.4, 421.0
+# (n, n_def, def_rate, avg_pd, hi_risk, appr_rate, el_cr, ead_cr are already
+#  set above via mb.get_portfolio_kpis() — sql/dashboard/portfolio_kpis.sql —
+#  nothing further to compute here.)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -371,9 +358,9 @@ if "01" in page:
     kpi_strip([
         ("Total Borrowers",   f"{n:,}",           "active portfolio",         "w"),
         ("Default Rate",      f"{def_rate:.1%}",   "vs 22% national avg",      "r"),
-        ("Approval Rate",     f"{appr_rate:.1%}",  "at threshold 0.50",        "g"),
+        ("Approval Rate",     f"{appr_rate:.1%}",  f"at threshold {mb.OPERATING_THRESHOLD:.2f}", "g"),
         ("Avg Predicted PD",  f"{avg_pd:.1%}",     "xgboost model output",     "a"),
-        ("High-Risk Count",   f"{hi_risk:,}",      f"PD ≥ 50%  ({hi_risk/n:.1%})", "r"),
+        ("High-Risk Count",   f"{hi_risk:,}",      f"PD ≥ {mb.OPERATING_THRESHOLD:.0%}  ({hi_risk/n:.1%})", "r"),
         ("Expected Loss",     f"₹{el_cr:.1f} Cr",  "PD × 45% LGD × EAD",      "a"),
     ])
 
@@ -382,8 +369,8 @@ if "01" in page:
     finding("Data Leakage Detected & Resolved",
             "Credit_Score achieved AUC&nbsp;=&nbsp;0.9998 as a single predictor — impossible in real credit risk. "
             "Feature was circularly derived from the target variable (Approved_Flag) in the same upstream CIBIL batch. "
-            "Excluded entirely. Behavioural model on 15 raw signals → AUC 0.8994. "
-            "Strongest real predictor: <strong style='color:#E8C97A;'>enq_L6m</strong> — 4+ enquiries in 6 months = 4× default rate.")
+            f"Excluded entirely. Conservative XGBoost on {metrics['n_features']} governed features → AUC {metrics['test_auc']:.4f}. "
+            "Strongest real predictor: <strong style='color:#E8C97A;'>recent_enquiries_6m</strong> — 4+ enquiries in 6 months = 4× default rate.")
 
     c1, c2 = st.columns(2, gap="medium")
 
@@ -396,7 +383,7 @@ if "01" in page:
         else:
             lo, md, hi = 22000, 16000, 13336
         fig = go.Figure(go.Pie(
-            labels=["Low Risk  PD < 25%", "Medium Risk  25–50%", "High Risk  PD ≥ 50%"],
+            labels=["Low Risk  PD < 25%", "Medium Risk  25–40%", f"High Risk  PD ≥ {mb.OPERATING_THRESHOLD:.0%}"],
             values=[lo, md, hi], hole=0.60,
             marker=dict(colors=[GREEN, AMBER, RED], line=dict(color=WHITE, width=2)),
             textfont=dict(size=10, family="IBM Plex Mono,monospace"),
@@ -458,7 +445,7 @@ if "01" in page:
         ("EL Rate",            f"{el_cr/ead_cr*100:.1f}%", AMBER),
         ("Excess NPA vs Avg",  "+4.0 pp",                  RED),
         ("Est. NPA Reduction", "18–24%",                   GREEN),
-        ("Model AUC",          "0.8994",                   GREEN),
+        ("Model AUC",          f"{metrics['test_auc']:.4f}",   GREEN),
     ])
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -570,11 +557,11 @@ elif "02" in page:
 # ══════════════════════════════════════════════════════════════════════════════
 elif "03" in page:
     kpi_strip([
-        ("AUC",             "0.8994", "test set",           "g"),
-        ("Precision",       "69.1%",  "false alarm: 31%",   "a"),
+        ("AUC",             f"{metrics['test_auc']:.4f}", "held-out test",      "g"),
+        ("Precision",       f"{metrics['test_precision']*100:.1f}%" if metrics['test_precision'] else "—", f"at threshold {mb.OPERATING_THRESHOLD:.2f}", "a"),
         ("Recall",          "71.0%",  "7 in 10 risky caught","a"),
-        ("F1 Score",        "0.700",  "best balance",       "w"),
-        ("CV AUC",          "0.8921", "±0.0038 · 5-fold",  "g"),
+        ("F1 Score",        f"{metrics['test_f1']:.3f}" if metrics['test_f1'] else "—",  "at threshold 0.50 (metadata)", "w"),
+        ("CV AUC",          f"{metrics['cv_auc_mean']:.4f}" if metrics['cv_auc_mean'] else "—", f"±{metrics['cv_auc_std']:.4f} · 5-fold" if metrics['cv_auc_std'] else "", "g"),
         ("scale_pos_weight","1.43",   "tuned from 2.85",    "w"),
     ])
 
@@ -582,21 +569,21 @@ elif "03" in page:
     c1, c2 = st.columns(2, gap="medium")
 
     with c1:
-        sec("ROC Curve — Receiver Operating Characteristic", "AUC 0.8994")
+        sec("ROC Curve — Receiver Operating Characteristic", f"AUC {metrics['test_auc']:.4f}")
         fig = go.Figure()
         if roc_df is not None and not roc_df.empty:
             fig.add_trace(go.Scatter(x=roc_df["fpr"], y=roc_df["tpr"], mode="lines",
-                name="Model B · AUC 0.8994",
+                name=f"Conservative XGBoost v1 · AUC {metrics['test_auc']:.4f}",
                 line=dict(color=GOLD, width=2.5),
                 fill="tozeroy", fillcolor="rgba(201,168,76,0.07)"))
         else:
             fpr = np.linspace(0,1,300); tpr = 1-(1-fpr)**3.8
-            fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name="Model B",
+            fig.add_trace(go.Scatter(x=fpr, y=tpr, mode="lines", name="Conservative XGBoost v1",
                 line=dict(color=GOLD, width=2.5),
                 fill="tozeroy", fillcolor="rgba(201,168,76,0.07)"))
         fig.add_trace(go.Scatter(x=[0,1], y=[0,1], mode="lines", name="Random baseline",
             line=dict(color=SLATE, width=1, dash="dot"), showlegend=True))
-        fig.add_annotation(x=0.62, y=0.70, text="AUC = 0.8994",
+        fig.add_annotation(x=0.62, y=0.70, text=f"AUC = {metrics['test_auc']:.4f}",
             showarrow=False, font=dict(color=NAVY, size=11, family="IBM Plex Mono,monospace"),
             bgcolor=WHITE, bordercolor=BLIGHT, borderpad=6)
         lay = jpm(300); lay["xaxis"]["title"]="False Positive Rate"; lay["yaxis"]["title"]="True Positive Rate"
@@ -604,10 +591,11 @@ elif "03" in page:
         st.plotly_chart(fig, use_container_width=True)
 
     with c2:
-        sec("Predicted PD Separation", "safe vs risky distribution overlap")
-        if pred_proba is not None and df is not None:
-            safe_p = pred_proba[df["default_risk"] == 0]
-            risk_p = pred_proba[df["default_risk"] == 1]
+        sec("Predicted PD Separation", "safe vs risky distribution overlap · model_predictions")
+        pd_dist = mb.run_sql(sql_con, "SELECT predicted_probability, actual_default FROM model_predictions") if sql_con is not None else pd.DataFrame()
+        if not pd_dist.empty:
+            safe_p = pd_dist.loc[pd_dist["actual_default"] == 0, "predicted_probability"]
+            risk_p = pd_dist.loc[pd_dist["actual_default"] == 1, "predicted_probability"]
             fig2 = go.Figure()
             fig2.add_trace(go.Histogram(x=safe_p, name="Safe (P1/P2)", nbinsx=40,
                 marker=dict(color=GREEN, opacity=0.65), histnorm="probability",
@@ -623,8 +611,8 @@ elif "03" in page:
             st.plotly_chart(fig2, use_container_width=True)
 
     # Confusion matrix
-    sec("Confusion Matrix — Test Set (10,268 borrowers)")
-    cm = metrics.get("confusion_matrix", [[6074,848],[773,2573]])
+    sec("Confusion Matrix — Full Portfolio", f"threshold {mb.OPERATING_THRESHOLD:.2f} · sql/dashboard/confusion_matrix.sql")
+    cm = metrics.get("confusion_matrix") or [[33824,4178],[3545,9789]]
     tp, fp, fn, tn = cm[1][1], cm[0][1], cm[1][0], cm[0][0]
     stat_row([
         ("True Positives",   f"{tp:,}", GREEN),
@@ -635,30 +623,18 @@ elif "03" in page:
         ("Recall",           f"{tp/(tp+fn)*100:.1f}%", GOLD),
     ])
 
-    # Threshold sensitivity table
+    # Threshold sensitivity table — sql/dashboard/threshold_sensitivity.sql
     sec("Threshold Sensitivity — Business Trade-Off Table",
-        "move threshold to tune approval rate vs default catch rate")
+        "move threshold to tune approval rate vs default catch rate · SQL layer")
 
-    if pred_proba is not None and df is not None:
-        actual = df["default_risk"].values
-        rows = []
-        for t in [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70]:
-            flag = pred_proba >= t
-            _tp = int((flag & (actual==1)).sum())
-            _fp = int((flag & (actual==0)).sum())
-            _fn = int((~flag & (actual==1)).sum())
-            p = _tp / max(_tp+_fp, 1)
-            r = _tp / max(_tp+_fn, 1)
-            rows.append({
-                "Threshold":     f"{t:.2f}",
-                "Approval %":    f"{(~flag).mean()*100:.1f}",
-                "Recall %":      f"{r*100:.1f}",
-                "Precision %":   f"{p*100:.1f}",
-                "False Alarm %": f"{_fp/max(_fp+_tp,1)*100:.1f}",
-                "F1":            f"{2*p*r/max(p+r,1e-6):.3f}",
-                "Current":       "◀ DEPLOYED" if abs(t-0.50)<0.01 else "",
-            })
-        tdf = pd.DataFrame(rows)
+    tdf_raw = mb.get_threshold_sensitivity(sql_con) if sql_con is not None else pd.DataFrame()
+    if not tdf_raw.empty:
+        tdf = tdf_raw.rename(columns={
+            "threshold": "Threshold", "approval_pct": "Approval %",
+            "recall_pct": "Recall %", "precision_pct": "Precision %",
+            "false_alarm_pct": "False Alarm %", "f1_score": "F1", "current": "Current",
+        })
+        tdf["Threshold"] = tdf["Threshold"].map(lambda t: f"{t:.2f}")
         st.dataframe(tdf, use_container_width=True, hide_index=True, height=300)
         st.download_button("Export threshold table CSV",
                            tdf.to_csv(index=False).encode(),
@@ -678,21 +654,21 @@ elif "04" in page:
         sec("Global Feature Importance — Mean |SHAP Value|",
             "computed on 5,000 held-out test samples")
         top = imp.head(15).sort_values("shap_importance", ascending=True)
-        BIZ = {"enq_L6m":"Enquiries — last 6 months  [#1]",
+        BIZ = {"recent_enquiries_6m":"Enquiries — last 6 months  [#1]",
                "num_times_delinquent":"Total missed payments",
-               "Age_Oldest_TL":"Credit history length  [protective]",
-               "Total_TL":"Total loan accounts  [protective]",
+               "credit_history_months":"Credit history length  [protective]",
+               "closed_loans":"Closed loan accounts  [protective]",
                "delinquency_score":"Payment miss severity",
                "active_loan_ratio":"Active loan overextension",
-               "enq_L12m":"Enquiries — last 12 months",
+               "recent_enquiries_12m":"Enquiries — last 12 months",
                "num_times_60p_dpd":"60+ DPD events",
-               "tot_enq":"Lifetime enquiries",
-               "Gold_TL":"Gold loans  [India-specific]",
+               "total_enquiries":"Lifetime enquiries",
+               "gold_loans":"Gold loans  [India-specific]",
                "missed_payment_ratio":"Missed payment ratio",
-               "NETMONTHLYINCOME":"Monthly income  [protective]",
-               "AGE":"Borrower age",
+               "monthly_income_inr":"Monthly income  [protective]",
+               "age":"Borrower age",
                "loan_type_diversity":"Loan type diversity  [protective]",
-               "Home_TL":"Home loans"}
+               "home_loans":"Home loans"}
         labels = [BIZ.get(f, f) for f in top["feature"]]
         colors = [RED if v > 0.4 else (GOLD if v > 0.15 else BLUE) for v in top["shap_importance"]]
         fig = go.Figure(go.Bar(
@@ -1063,10 +1039,10 @@ elif "06" in page:
                 if val == "HIGH":    return "color:#92400E;font-weight:500"
                 return "color:#1D4ED8"
             st.dataframe(
-                watchlist.style.applymap(_style_p, subset=["Priority"]),
+                watchlist.style.map(_style_p, subset=["Priority"]),
                 use_container_width=True, hide_index=True, height=320)
         else:
-            st.info("No DB — run create_database.py first.")
+            st.info("No DB — run score_portfolio.py first.")
 
     # Delinquency funnel
     sec("Delinquency Progression Funnel", "where borrowers fall off — collections intervention timing")
@@ -1120,13 +1096,20 @@ elif "06" in page:
 # ══════════════════════════════════════════════════════════════════════════════
 elif "07" in page:
 
+    # ── Load full query catalogue — every .sql file in sql/queries/ AND
+    #    sql/model_queries/, read live from disk, not hand-copied into a
+    #    Python dict. Nothing here can drift from the actual repo files. ──
+    QUERIES = mb.load_all_query_files()
+    n_historical = sum(1 for q in QUERIES.values() if q["layer"] == "historical")
+    n_model = sum(1 for q in QUERIES.values() if q["layer"] == "model")
+
     # ── KPI strip ─────────────────────────────────────────────────────────────
     kpi_strip([
-        ("SQL Queries",    "10",         "business questions answered",    "w"),
-        ("Data Source",    "SQLite DB",  "51,336 borrowers · 3 tables",    "w"),
-        ("Tables",         "borrowers · delinquency · risk_segments", "queryable", "w"),
+        ("SQL Queries",    f"{len(QUERIES)}",  f"{n_historical} historical · {n_model} model-layer", "w"),
+        ("Data Source",    "DuckDB",     "51,336 borrowers · gold layer",  "w"),
+        ("Tables",         "fact_credit_risk · model_predictions", "queryable", "w"),
         ("DB Status",      "Connected" if db_ok else "Missing",
-                           "data/credit_risk.db",                            "g" if db_ok else "r"),
+                           "data/gold/credit_risk.duckdb",                   "g" if db_ok else "r"),
     ])
 
     st.markdown(f'<div style="padding:20px 28px;">', unsafe_allow_html=True)
@@ -1134,248 +1117,26 @@ elif "07" in page:
     # ── Explainer callout ─────────────────────────────────────────────────────
     finding(
         "Why SQL alongside XGBoost?",
-        "Not everyone on a credit risk team uses Python. A collections manager needs Query 09 "
-        "every Monday morning without opening a terminal. A CFO needs Query 01 for the weekly KPI "
-        "meeting. These 10 queries deliver the same insights as the ML model — in plain SQL that any "
-        "analyst can run in Excel, Tableau, or Power BI. This is what separates a business analytics "
-        "platform from a data science notebook."
+        "Not everyone on a credit risk team uses Python. A collections manager needs a query "
+        "every Monday morning without opening a terminal. Two layers here: 10 historical/descriptive "
+        "queries against the raw portfolio (what happened), and 10 model-layer queries against "
+        "conservative_xgb_v1's actual scored predictions (what the model thinks will happen, "
+        "and where it's wrong) — calibration, subgroup fairness, false positives/negatives, "
+        "expected-loss concentration. This is what separates a business analytics platform from "
+        "a data science notebook that only a data scientist can query."
     )
-
-    # ── Query catalogue ───────────────────────────────────────────────────────
-    QUERIES = {
-        "01 · Portfolio Health": {
-            "file": "01_portfolio_health.sql",
-            "business_q": "How risky is our overall loan book right now?",
-            "output": "One-row KPI summary: total borrowers, default rate, avg income, avg delinquencies, avg enquiries.",
-            "used_by": "Credit Risk Manager · Monday morning dashboard",
-            "shap_link": None,
-            "sql": """SELECT
-    COUNT(*)                              AS total_borrowers,
-    SUM(default_risk)                     AS total_defaults,
-    ROUND(AVG(default_risk)*100, 2)       AS default_rate_pct,
-    ROUND(AVG(NETMONTHLYINCOME), 0)       AS avg_monthly_income,
-    ROUND(AVG(num_times_delinquent), 2)   AS avg_delinquencies,
-    ROUND(AVG(enq_L6m), 2)               AS avg_enquiries_6m
-FROM borrowers;""",
-        },
-        "02 · Default by Segment": {
-            "file": "02_default_by_segment.sql",
-            "business_q": "Which customer segments are driving NPA?",
-            "output": "Default rate and borrower count by risk segment (extreme/high/standard).",
-            "used_by": "Portfolio analytics · segment strategy",
-            "shap_link": None,
-            "sql": """SELECT
-    rs.risk_segment,
-    COUNT(*)                              AS borrower_count,
-    ROUND(AVG(rs.default_risk)*100, 2)    AS default_rate_pct,
-    ROUND(AVG(rs.NETMONTHLYINCOME), 0)    AS avg_income
-FROM risk_segments rs
-GROUP BY rs.risk_segment
-ORDER BY default_rate_pct DESC;""",
-        },
-        "03 · Enquiry–Default Correlation": {
-            "file": "03_enquiry_default_correlation.sql",
-            "business_q": "Does credit-seeking behaviour predict default?",
-            "output": "Default rate by enquiry count band (0 / 1 / 2 / 3 / 4-5 / 6+) with lift over baseline.",
-            "used_by": "Policy design · proves the #1 SHAP finding in SQL with zero ML",
-            "shap_link": "enq_L6m · SHAP 1.183 · rank #1",
-            "sql": """SELECT
-    CASE
-        WHEN enq_L6m = 0             THEN '0 enquiries'
-        WHEN enq_L6m = 1             THEN '1 enquiry'
-        WHEN enq_L6m BETWEEN 2 AND 3 THEN '2-3 enquiries'
-        WHEN enq_L6m BETWEEN 4 AND 5 THEN '4-5 enquiries'
-        ELSE                              '6+ enquiries'
-    END                                   AS enquiry_band,
-    COUNT(*)                              AS borrower_count,
-    ROUND(AVG(default_risk)*100, 2)       AS default_rate_pct,
-    ROUND(AVG(default_risk) /
-        (SELECT AVG(default_risk) FROM borrowers), 2)
-                                          AS lift_over_baseline
-FROM borrowers
-GROUP BY enquiry_band
-ORDER BY MIN(enq_L6m);""",
-        },
-        "04 · Delinquency Funnel": {
-            "file": "04_delinquency_funnel.sql",
-            "business_q": "Where in the repayment journey do borrowers start failing?",
-            "output": "4-stage funnel: active → 30 DPD → 60 DPD → default. Shows transition rates.",
-            "used_by": "Collections team · intervention timing",
-            "shap_link": None,
-            "sql": """WITH funnel AS (
-    SELECT
-        COUNT(*)                                        AS total_portfolio,
-        SUM(CASE WHEN num_times_delinquent>0 THEN 1 ELSE 0 END) AS ever_30dpd,
-        SUM(CASE WHEN num_times_60p_dpd>0    THEN 1 ELSE 0 END) AS ever_60dpd,
-        SUM(default_risk)                               AS confirmed_default
-    FROM borrowers
-)
-SELECT 'Active Portfolio'  AS stage, total_portfolio   AS count FROM funnel
-UNION ALL
-SELECT 'Ever 30+ DPD',     ever_30dpd                          FROM funnel
-UNION ALL
-SELECT 'Ever 60+ DPD',     ever_60dpd                          FROM funnel
-UNION ALL
-SELECT 'Confirmed Default', confirmed_default                   FROM funnel;""",
-        },
-        "05 · Credit History vs Default": {
-            "file": "05_credit_history_vs_default.sql",
-            "business_q": "Does credit history length protect against default?",
-            "output": "Default rate by tradeline age bucket. Proves thin-file risk in SQL.",
-            "used_by": "Thin-file pricing policy · Policy 2",
-            "shap_link": "Age_Oldest_TL · SHAP 0.460 · rank #3 · protective",
-            "sql": """SELECT
-    CASE
-        WHEN Age_Oldest_TL < 12              THEN 'Under 1 year'
-        WHEN Age_Oldest_TL BETWEEN 12 AND 23 THEN '1-2 years'
-        WHEN Age_Oldest_TL BETWEEN 24 AND 47 THEN '2-4 years'
-        WHEN Age_Oldest_TL BETWEEN 48 AND 95 THEN '4-8 years'
-        ELSE                                      '8+ years'
-    END                                      AS credit_history_band,
-    COUNT(*)                                 AS borrower_count,
-    ROUND(AVG(default_risk)*100, 2)          AS default_rate_pct
-FROM borrowers
-WHERE Age_Oldest_TL IS NOT NULL
-GROUP BY credit_history_band
-ORDER BY AVG(Age_Oldest_TL);""",
-        },
-        "06 · High-Risk Identification": {
-            "file": "06_high_risk_identification.sql",
-            "business_q": "Which borrower profiles should trigger automatic review?",
-            "output": "3 policy rules as SQL flags: enquiry cap, thin file, 60+ DPD. Shows default rate in each flagged segment.",
-            "used_by": "Credit policy implementation · underwriting rules",
-            "shap_link": None,
-            "sql": """WITH flags AS (
-    SELECT default_risk,
-        CASE WHEN enq_L6m >= 4                          THEN 1 ELSE 0 END AS flag_high_enquiry,
-        CASE WHEN Age_Oldest_TL < 24                    THEN 1 ELSE 0 END AS flag_thin_file,
-        CASE WHEN num_times_60p_dpd >= 1                THEN 1 ELSE 0 END AS flag_severe_delinq,
-        CASE WHEN enq_L6m >= 4 AND Age_Oldest_TL < 24  THEN 1 ELSE 0 END AS flag_extreme_risk
-    FROM borrowers
-)
-SELECT 'High Enquiry (≥4 in 6m)'  AS policy_rule,
-    SUM(flag_high_enquiry) AS flagged,
-    ROUND(AVG(CASE WHEN flag_high_enquiry=1 THEN default_risk END)*100,2) AS default_rate_pct
-FROM flags
-UNION ALL
-SELECT 'Thin File (<2yr history)',
-    SUM(flag_thin_file),
-    ROUND(AVG(CASE WHEN flag_thin_file=1 THEN default_risk END)*100,2)
-FROM flags
-UNION ALL
-SELECT 'Severe Delinquency (60+ DPD)',
-    SUM(flag_severe_delinq),
-    ROUND(AVG(CASE WHEN flag_severe_delinq=1 THEN default_risk END)*100,2)
-FROM flags;""",
-        },
-        "07 · Income vs Behaviour": {
-            "file": "07_income_default_analysis.sql",
-            "business_q": "Is income a reliable risk predictor, or does behaviour matter more?",
-            "output": "Default rate by income band, cross-tabbed with high vs low enquiry rate within each band.",
-            "used_by": "Feature importance narrative · proves behaviour > income alone",
-            "shap_link": "NETMONTHLYINCOME · SHAP 0.021 · rank #12 — much weaker than enq_L6m",
-            "sql": """SELECT
-    CASE
-        WHEN NETMONTHLYINCOME < 10000            THEN '1. <10k'
-        WHEN NETMONTHLYINCOME BETWEEN 10000 AND 19999 THEN '2. 10-20k'
-        WHEN NETMONTHLYINCOME BETWEEN 20000 AND 34999 THEN '3. 20-35k'
-        WHEN NETMONTHLYINCOME BETWEEN 35000 AND 59999 THEN '4. 35-60k'
-        ELSE                                          '5. 60k+'
-    END                                          AS income_band,
-    COUNT(*)                                     AS borrower_count,
-    ROUND(AVG(default_risk)*100, 2)              AS default_rate_pct,
-    ROUND(AVG(CASE WHEN enq_L6m >= 4 THEN default_risk END)*100, 2)
-                                                 AS dr_high_enquiry_pct,
-    ROUND(AVG(CASE WHEN enq_L6m <= 1 THEN default_risk END)*100, 2)
-                                                 AS dr_low_enquiry_pct
-FROM borrowers
-WHERE NETMONTHLYINCOME IS NOT NULL
-GROUP BY income_band
-ORDER BY income_band;""",
-        },
-        "08 · Gold Loan Analysis": {
-            "file": "08_gold_loan_analysis.sql",
-            "business_q": "Are gold loan borrowers higher risk? (India-specific)",
-            "output": "Default rate by gold loan count. Gold loans are last-resort secured financing — uniquely Indian signal.",
-            "used_by": "India-specific credit strategy · Gold_TL feature analysis",
-            "shap_link": "Gold_TL · SHAP 0.038 · rank #10",
-            "sql": """SELECT
-    CASE
-        WHEN Gold_TL = 0 THEN 'No gold loans'
-        WHEN Gold_TL = 1 THEN '1 gold loan'
-        WHEN Gold_TL = 2 THEN '2 gold loans'
-        ELSE                  '3+ gold loans'
-    END                             AS gold_loan_bucket,
-    COUNT(*)                        AS borrower_count,
-    ROUND(AVG(default_risk)*100,2)  AS default_rate_pct,
-    ROUND(AVG(enq_L6m),2)          AS avg_recent_enquiries,
-    ROUND(AVG(NETMONTHLYINCOME),0)  AS avg_monthly_income
-FROM borrowers
-WHERE Gold_TL IS NOT NULL
-GROUP BY gold_loan_bucket
-ORDER BY AVG(Gold_TL);""",
-        },
-        "09 · Early Intervention Candidates": {
-            "file": "09_early_intervention_candidates.sql",
-            "business_q": "Which borrowers should the collections team contact NOW — before they hit 60 DPD?",
-            "output": "Ranked watchlist of non-defaulted borrowers with early warning signals. Urgency score = weighted composite.",
-            "used_by": "Collections team · weekly run · top 500 ranked by urgency",
-            "shap_link": None,
-            "sql": """SELECT
-    borrower_id,
-    enq_L6m                AS recent_enquiries,
-    num_times_delinquent   AS total_delinquencies,
-    num_times_60p_dpd      AS serious_dpd,
-    ROUND(missed_payment_ratio, 2) AS missed_pmt_ratio,
-    ROUND(
-        (enq_L6m          * 0.30) +
-        (num_times_delinquent * 0.25) +
-        (missed_payment_ratio * 0.25) +
-        (active_loan_ratio    * 0.20), 3
-    )                      AS urgency_score,
-    CASE
-        WHEN enq_L6m>=4 AND Age_Oldest_TL<24 THEN 'EXTREME — Act immediately'
-        WHEN enq_L6m>=4 OR num_times_60p_dpd>=1  THEN 'HIGH — Contact this week'
-        ELSE                                           'MEDIUM — Monitor closely'
-    END                    AS priority
-FROM borrowers
-WHERE default_risk = 0
-  AND (enq_L6m>=3 OR num_times_delinquent>=2 OR missed_payment_ratio>=0.2)
-ORDER BY urgency_score DESC
-LIMIT 500;""",
-        },
-        "10 · Policy Impact Simulation": {
-            "file": "10_policy_impact_simulation.sql",
-            "business_q": "If we implement the 3 credit policies, what is the estimated NPA reduction?",
-            "output": "Before/after NPA simulation per policy. Matches the Python Policy Simulator output — in pure SQL.",
-            "used_by": "Senior management · credit policy committee · board reporting",
-            "shap_link": None,
-            "sql": """WITH sim AS (
-    SELECT default_risk,
-        CASE WHEN enq_L6m >= 4    THEN 1 ELSE 0 END AS policy1,
-        CASE WHEN Age_Oldest_TL < 24 THEN 1 ELSE 0 END AS policy2,
-        CASE WHEN enq_L6m>=4 OR Age_Oldest_TL<24 THEN 1 ELSE 0 END AS any_policy
-    FROM borrowers
-)
-SELECT
-    COUNT(*)                                             AS total_borrowers,
-    SUM(default_risk)                                    AS baseline_defaults,
-    ROUND(AVG(default_risk)*100, 2)                      AS baseline_npa_pct,
-    SUM(policy1 * default_risk)                          AS caught_by_policy1,
-    SUM(policy2 * default_risk)                          AS caught_by_policy2,
-    ROUND(
-        (SUM(default_risk) - SUM(any_policy*default_risk)*0.70)*100.0/COUNT(*), 2
-    )                                                    AS estimated_npa_after_policies
-FROM sim;""",
-        },
-    }
 
     # ── Query selector ─────────────────────────────────────────────────────────
-    selected = st.selectbox(
-        "Select query to inspect",
-        list(QUERIES.keys()),
-        index=0,
-    )
+    layer_filter = st.radio("Layer", ["All", "Historical / Descriptive", "Model Predictions"],
+                             horizontal=True, label_visibility="collapsed")
+    if layer_filter == "Historical / Descriptive":
+        visible_keys = [k for k, v in QUERIES.items() if v["layer"] == "historical"]
+    elif layer_filter == "Model Predictions":
+        visible_keys = [k for k, v in QUERIES.items() if v["layer"] == "model"]
+    else:
+        visible_keys = list(QUERIES.keys())
+
+    selected = st.selectbox("Select query to inspect", visible_keys, index=0)
     q = QUERIES[selected]
 
     # ── Two-column layout: metadata left, live result right ────────────────────
@@ -1394,7 +1155,7 @@ FROM sim;""",
           </div>
           <div style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;
                       color:{WHITE};font-weight:400;line-height:1.5;">
-            {q['business_q']}
+            {q['business_q'] or '—'}
           </div>
         </div>""", unsafe_allow_html=True)
 
@@ -1408,47 +1169,32 @@ FROM sim;""",
           </div>
           <div style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;
                       color:{TEXTDARK};font-weight:300;line-height:1.5;">
-            {q['output']}
+            {q['output'] or '—'}
           </div>
         </div>""", unsafe_allow_html=True)
 
-        # Used by
+        # Layer badge — which data layer this query runs against
+        layer_color = BLUE if q["layer"] == "historical" else GOLD
+        layer_text = ("Historical / descriptive — raw features + actual outcome, no model involved"
+                      if q["layer"] == "historical" else
+                      "Model layer — conservative_xgb_v1's scored predictions (model_predictions table)")
         st.markdown(f"""
-        <div style="background:{WHITE};border:1px solid {BLIGHT};border-left:4px solid {GREEN};
+        <div style="background:{WHITE};border:1px solid {BLIGHT};border-left:4px solid {layer_color};
                     padding:12px 16px;margin-bottom:10px;">
-          <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:{GREEN};
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:{layer_color};
                       text-transform:uppercase;letter-spacing:0.12em;margin-bottom:5px;">
-            Used By
+            Data Layer
           </div>
           <div style="font-family:'IBM Plex Sans',sans-serif;font-size:12px;
-                      color:{TEXTDARK};font-weight:400;">{q['used_by']}</div>
+                      color:{TEXTDARK};font-weight:400;">{layer_text}</div>
         </div>""", unsafe_allow_html=True)
 
-        # SHAP connection badge (if applicable)
-        if q["shap_link"]:
-            st.markdown(f"""
-            <div style="background:#FFFBEB;border:1px solid {GOLD};border-left:4px solid {GOLD};
-                        padding:10px 16px;margin-bottom:10px;">
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:{GOLD};
-                          text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px;">
-                SHAP Connection
-              </div>
-              <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#78350F;">
-                {q['shap_link']}
-              </div>
-              <div style="font-family:'IBM Plex Sans',sans-serif;font-size:11px;color:#92400E;
-                          margin-top:4px;font-weight:300;">
-                This SQL query reproduces the same insight the XGBoost model found —
-                with no model required.
-              </div>
-            </div>""", unsafe_allow_html=True)
-
         # SQL code block
-        sec("SQL", f"file: {q['file']}")
+        sec("SQL", f"file: sql/{'queries' if q['layer']=='historical' else 'model_queries'}/{q['file']}")
         st.code(q["sql"], language="sql")
 
     with cm2:
-        sec("Live Query Result", "executed against data/credit_risk.db")
+        sec("Live Query Result", "executed against data/gold/credit_risk.duckdb")
 
         if not db_ok:
             st.markdown(f"""
@@ -1461,19 +1207,18 @@ FROM sim;""",
               <div style="font-family:'IBM Plex Sans',sans-serif;font-size:13px;
                           color:{WHITE};font-weight:300;line-height:1.6;">
                 Run this command first:<br><br>
-                <code style="color:{GOLD2};font-size:12px;">python src/data/create_database.py</code><br><br>
-                This builds <code style="color:{GOLD2};">data/credit_risk.db</code> from your
-                silver parquet data. Once created, all 10 queries run live here.
+                <code style="color:{GOLD2};font-size:12px;">python src/analytics/score_portfolio.py</code><br><br>
+                This builds <code style="color:{GOLD2};">data/gold/credit_risk.duckdb</code> with both
+                the gold fact table and conservative_xgb_v1's scored predictions. Once created, all
+                {len(QUERIES)} queries run live here.
               </div>
             </div>""", unsafe_allow_html=True)
         else:
-            # Run the selected query live
             result = run_sql(q["sql"])
 
             if result.empty:
-                st.warning("Query returned no rows. Check that create_database.py has been run.")
+                st.warning("Query returned no rows. Check that score_portfolio.py has been run.")
             else:
-                # Row/column count badge
                 st.markdown(f"""
                 <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
                   <div style="background:{NAVY2};padding:4px 12px;border:1px solid {BORDER};">
@@ -1493,11 +1238,9 @@ FROM sim;""",
                   </div>
                 </div>""", unsafe_allow_html=True)
 
-                # Data table
                 st.dataframe(result, use_container_width=True, hide_index=True,
                              height=min(40 + len(result) * 36, 400))
 
-                # Download
                 st.download_button(
                     f"Export result CSV — {q['file'].replace('.sql','')}",
                     result.to_csv(index=False).encode(),
@@ -1506,13 +1249,14 @@ FROM sim;""",
                 )
 
                 # Auto chart for specific queries
-                if "03" in selected and "default_rate_pct" in result.columns and "enquiry_band" in result.columns:
-                    sec("Chart — Default Rate by Enquiry Band",
-                        "the SQL proof of SHAP finding #1")
+                if selected.startswith("03_enquiry_default_correlation") and \
+                        "default_rate_pct" in result.columns and "enquiry_band" in result.columns:
+                    sec("Chart — Default Rate by Enquiry Band", "the SQL proof of SHAP finding #1")
                     fig_q = go.Figure()
                     bar_c = [RED if v > 30 else (AMBER if v > 20 else GREEN)
                              for v in result["default_rate_pct"]]
-                    baseline_val = float(run_sql("SELECT ROUND(AVG(default_risk)*100,2) v FROM borrowers").iloc[0,0]) if db_ok else 26.0
+                    baseline_row = run_sql("SELECT ROUND(AVG(default_risk)*100,2) v FROM borrowers")
+                    baseline_val = float(baseline_row.iloc[0, 0]) if not baseline_row.empty else 26.0
                     fig_q.add_hline(y=baseline_val, line=dict(color=SLATE, width=1.5, dash="dot"),
                                     annotation_text=f"Portfolio avg {baseline_val:.1f}%",
                                     annotation_font=dict(size=9, color=SLATE))
@@ -1528,26 +1272,8 @@ FROM sim;""",
                     fig_q.update_layout(**lay_q)
                     st.plotly_chart(fig_q, use_container_width=True)
 
-                elif "07" in selected and "default_rate_pct" in result.columns:
-                    sec("Chart — Behaviour vs Income", "high-enquiry default rate in each income band")
-                    if "dr_high_enquiry_pct" in result.columns and "dr_low_enquiry_pct" in result.columns:
-                        fig_q = go.Figure()
-                        fig_q.add_trace(go.Bar(name="Overall DR %",
-                            x=result["income_band"], y=result["default_rate_pct"],
-                            marker=dict(color=SLATE, opacity=0.6, line=dict(width=0))))
-                        fig_q.add_trace(go.Bar(name="High Enquiry DR %",
-                            x=result["income_band"], y=result["dr_high_enquiry_pct"],
-                            marker=dict(color=RED, opacity=0.85, line=dict(width=0))))
-                        fig_q.add_trace(go.Bar(name="Low Enquiry DR %",
-                            x=result["income_band"], y=result["dr_low_enquiry_pct"],
-                            marker=dict(color=GREEN, opacity=0.85, line=dict(width=0))))
-                        lay_q = jpm(280)
-                        lay_q["barmode"] = "group"
-                        lay_q["yaxis"]["title"] = "Default Rate %"
-                        fig_q.update_layout(**lay_q)
-                        st.plotly_chart(fig_q, use_container_width=True)
-
-                elif "08" in selected and "default_rate_pct" in result.columns:
+                elif selected.startswith("08_gold_loan_analysis") and "default_rate_pct" in result.columns \
+                        and "gold_loan_bucket" in result.columns:
                     sec("Chart — Gold Loan Risk Profile")
                     fig_q = go.Figure(go.Bar(
                         x=result["gold_loan_bucket"], y=result["default_rate_pct"],
@@ -1564,18 +1290,66 @@ FROM sim;""",
                     fig_q.update_layout(**lay_q)
                     st.plotly_chart(fig_q, use_container_width=True)
 
+                elif selected.startswith("03_calibration_by_decile") and \
+                        "actual_default_rate" in result.columns and "avg_predicted_prob" in result.columns:
+                    sec("Chart — Calibration Curve", "predicted PD vs actual default rate, by decile")
+                    fig_q = go.Figure()
+                    fig_q.add_trace(go.Scatter(x=result["probability_decile"], y=result["avg_predicted_prob"],
+                        mode="lines+markers", name="Avg Predicted PD",
+                        line=dict(color=GOLD, width=2.5), marker=dict(size=7)))
+                    fig_q.add_trace(go.Scatter(x=result["probability_decile"], y=result["actual_default_rate"],
+                        mode="lines+markers", name="Actual Default Rate",
+                        line=dict(color=RED, width=2.5, dash="dot"), marker=dict(size=7)))
+                    lay_q = jpm(280)
+                    lay_q["xaxis"]["title"] = "Probability Decile (1 = lowest risk)"
+                    lay_q["yaxis"]["title"] = "Rate"
+                    fig_q.update_layout(**lay_q)
+                    st.plotly_chart(fig_q, use_container_width=True)
+
+                elif selected.startswith("10_portfolio_expected_loss") and \
+                        "score_band" in result.columns and "pct_of_all_defaults" in result.columns:
+                    sec("Chart — Default Concentration by Score Band",
+                        "where the actual defaults sit relative to portfolio share")
+                    fig_q = go.Figure()
+                    fig_q.add_trace(go.Bar(name="% of Portfolio", x=result["score_band"],
+                        y=result["pct_of_portfolio"], marker=dict(color=SLATE, opacity=0.6)))
+                    fig_q.add_trace(go.Bar(name="% of All Defaults", x=result["score_band"],
+                        y=result["pct_of_all_defaults"], marker=dict(color=RED, opacity=0.85)))
+                    lay_q = jpm(280)
+                    lay_q["barmode"] = "group"
+                    lay_q["yaxis"]["title"] = "% Share"
+                    fig_q.update_layout(**lay_q)
+                    st.plotly_chart(fig_q, use_container_width=True)
+
     # ── All-queries summary table at the bottom ────────────────────────────────
     st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
-    sec("All 10 Queries at a Glance", "click any row above to run it live")
+    sec(f"All {len(QUERIES)} Queries at a Glance", "click any row above to run it live")
     summary_rows = []
     for name, meta in QUERIES.items():
         summary_rows.append({
             "Query": name,
-            "Business Question": meta["business_q"],
-            "Used By": meta["used_by"].split("·")[0].strip(),
-            "SHAP Link": meta["shap_link"] or "—",
+            "Layer": meta["layer_label"],
+            "Business Question": meta["business_q"] or "—",
         })
-    st.dataframe(pd.DataFrame(summary_rows), use_container_width=True,
-                 hide_index=True, height=380)
+    summary_df = pd.DataFrame(summary_rows)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+st.dataframe(
+    summary_df,
+    use_container_width=True,
+    hide_index=True,
+    height=min(80 + len(summary_df) * 42, 650),
+    column_config={
+        "Query": st.column_config.TextColumn(
+            "Query",
+            width="medium",
+        ),
+        "Layer": st.column_config.TextColumn(
+            "Layer",
+            width="medium",
+        ),
+        "Business Question": st.column_config.TextColumn(
+            "Business Question",
+            width="large",
+        ),
+    },
+)

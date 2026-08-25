@@ -40,7 +40,7 @@ from sklearn.model_selection import train_test_split
 
 from scipy.special import logit
 
-from final_model_config import (
+from src.modeling.final_model_config import (
     MODEL_NAME,
     RANDOM_STATE,
     FEATURES,
