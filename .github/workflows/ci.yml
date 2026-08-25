@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+
+jobs:
+  test:
+    name: Python checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Verify Python syntax
+        run: |
+          python -m compileall -q src app.py
+
+      - name: Validate SQL files exist and are non-empty
+        shell: bash
+        run: |
+          set -e
+
+          if [ ! -d "sql" ]; then
+            echo "ERROR: sql directory not found"
+            exit 1
+          fi
+
+          sql_count=$(find sql -type f -name "*.sql" | wc -l)
+
+          if [ "$sql_count" -eq 0 ]; then
+            echo "ERROR: No SQL files found"
+            exit 1
+          fi
+
+          echo "Found $sql_count SQL files"
+
+          while IFS= read -r file; do
+            if [ ! -s "$file" ]; then
+              echo "ERROR: Empty SQL file: $file"
+              exit 1
+            fi
+          done < <(find sql -type f -name "*.sql")
+
+      - name: Run tests
+        run: |
+          if [ -d "tests" ]; then
+            pytest -q
+          else
+            echo "No tests directory found yet."
+            echo "Skipping pytest; syntax and SQL checks have passed."
+          fi
