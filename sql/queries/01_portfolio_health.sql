@@ -1,4 +1,4 @@
-============================================================
+-- ============================================================
 -- 01_portfolio_health.sql
 -- Business Question: How risky is our overall loan book?
 -- Output: Portfolio-level KPIs for the executive dashboard

@@ -1,7 +1,7 @@
 -- ============================================================
 -- 03_calibration_by_decile.sql
--- Business Question: When the model says "10% risk", does that
---                    group actually default ~10% of the time?
+-- Business Question: When the model says "10% risk", does that group actually default ~10% of the time?
+--                    
 -- Output: Predicted vs actual default rate per probability decile
 --         -- a SQL reliability curve
 -- Layer: model_predictions

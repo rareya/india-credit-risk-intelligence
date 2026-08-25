@@ -1,7 +1,7 @@
 -- ============================================================
 -- 04_delinquency_funnel.sql
--- Business Question: Where in the repayment journey do
---                    borrowers start failing?
+-- Business Question: Where in the repayment journey do  borrowers start failing?
+--                   
 -- Output: Funnel from active → 30DPD → 60DPD → default
 -- Used by: Collections team for intervention timing
 -- ============================================================

@@ -1,7 +1,7 @@
 -- ============================================================
 -- 09_early_intervention_candidates.sql
--- Business Question: Which current borrowers should the
---                    collections team contact NOW — before
+-- Business Question: Which current borrowers should the collections team contact NOW? 
+--                    before
 --                    they hit 60 DPD?
 -- Output: Ranked list of intervention candidates
 -- Used by: Collections team, weekly run

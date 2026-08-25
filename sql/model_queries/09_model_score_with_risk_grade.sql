@@ -1,6 +1,9 @@
 -- ============================================================
 -- 09_model_score_within_risk_grade.sql
--- Business Question: risk_grade (P1-P4) is NOT an independent
+-- Business Question: WITHIN a grade,
+--                    does the model add resolution the coarse 4-bucket grade doesn't have ?
+--                    
+--                    risk_grade (P1-P4) is NOT an independent
 --                    signal -- default_risk is derived directly
 --                    from it in build_gold.py (P1/P2->0, P3/P4->1),
 --                    so grade vs actual_default_rate is circular

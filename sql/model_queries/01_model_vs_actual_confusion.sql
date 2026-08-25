@@ -1,8 +1,8 @@
 -- ============================================================
 -- 01_model_vs_actual_confusion.sql
--- Business Question: How well does the model's decision at the
---                    current operating threshold actually match
---                    what happened?
+-- Business Question: How well does the model's decision at the current operating threshold actually match  what happened?
+--                    
+--                   
 -- Output: Confusion matrix + precision/recall computed in SQL,
 --         as a cross-check against threshold_analysis.py's numbers
 -- Layer: model_predictions (predicted_probability, predicted_class)

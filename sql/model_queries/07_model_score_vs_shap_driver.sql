@@ -1,8 +1,8 @@
 -- ============================================================
 -- 07_model_score_vs_shap_top_driver.sql
--- Business Question: For high-scoring borrowers, is the model's
---                    risk score actually being driven by the
---                    #1 global SHAP feature (recent_enquiries_6m),
+-- Business Question: For high-scoring borrowers, is the model's risk score actually being driven by the  #1 global SHAP feature?
+--                    
+--                    (recent_enquiries_6m),
 --                    or something else?
 -- Output: Predicted probability against recent_enquiries_6m bands,
 --         to sanity-check the model's top feature behaves the way

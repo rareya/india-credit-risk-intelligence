@@ -1,8 +1,8 @@
 -- ============================================================
 -- 10_portfolio_expected_loss_by_score_band.sql
--- Business Question: If the portfolio is segmented by model
---                    score band, how much of the actual default
---                    volume sits in each band -- i.e. where
+-- Business Question: If the portfolio is segmented by model score band, how much of the actual default volume sits in each band?
+--                    
+--                     -- i.e. where
 --                    should credit-policy attention concentrate?
 -- Output: Portfolio share and default share per score band,
 --         with concentration ratio (default share / portfolio

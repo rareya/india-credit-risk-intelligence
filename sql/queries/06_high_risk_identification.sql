@@ -1,7 +1,7 @@
 -- ============================================================
 -- 06_high_risk_identification.sql
--- Business Question: Which specific borrower profiles should
---                    trigger automatic review?
+-- Business Question: Which specific borrower profiles should trigger automatic review?
+--                    
 -- Output: Rule-based high-risk flag with default rate proof
 -- Used by: Credit policy implementation
 -- ============================================================

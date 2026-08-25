@@ -1,7 +1,7 @@
 -- ============================================================
 -- 06_false_positives_flagged_unfairly.sql
--- Business Question: Which borrowers did the model flag as
---                    high-risk who never actually defaulted --
+-- Business Question: Which borrowers did the model flag as high-risk who never actually defaulted ?
+--                     --
 --                    i.e. who would be denied/reviewed unfairly
 --                    at the current threshold?
 -- Output: Ranked list of false positives, most confidently wrong

@@ -1,7 +1,7 @@
 -- ============================================================
 -- 05_credit_history_vs_default.sql
--- Business Question: Does credit history length protect
---                    against default?
+-- Business Question: Does credit history length protect  against default?
+--                  
 -- Output: Default rate by tradeline age bucket
 -- Insight: Age_Oldest_TL is #3 SHAP feature
 -- ============================================================

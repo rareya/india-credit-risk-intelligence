@@ -1,7 +1,7 @@
 -- ============================================================
 -- 07_income_default_analysis.sql
--- Business Question: Is income a reliable risk predictor,
---                    or does behaviour matter more?
+-- Business Question: Is income a reliable risk predictor, or does behaviour matter more?
+--                    
 -- Output: Default rate by income band, with behavioural
 --         overlay to prove behaviour > income alone
 -- ============================================================

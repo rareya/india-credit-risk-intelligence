@@ -1,8 +1,8 @@
 -- ============================================================
 -- 04_subgroup_fairness_check.sql
--- Business Question: Does the model perform consistently across
---                    demographic and CIBIL-band subgroups, or are
---                    there segments it systematically mishandles?
+-- Business Question: Does the model perform consistently across demographic and CIBIL-band subgroups, or are  there segments it systematically mishandles?
+--                    
+--                   
 -- Output: Predicted vs actual default rate, and error rate, by
 --         cibil_band -- SQL version of subgroup_robustness.py's
 --         headline finding

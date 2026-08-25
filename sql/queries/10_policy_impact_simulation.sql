@@ -1,8 +1,8 @@
 -- ============================================================
 -- 10_policy_impact_simulation.sql
--- Business Question: If we implement the 3 recommended
---                    credit policies, what is the estimated
---                    NPA reduction?
+-- Business Question: If we implement the 3 recommended credit policies, what is the estimated NPA reduction?
+--                    
+--                    
 -- Output: Before/after NPA simulation per policy rule
 -- Used by: Senior management, credit policy committee
 -- ============================================================
