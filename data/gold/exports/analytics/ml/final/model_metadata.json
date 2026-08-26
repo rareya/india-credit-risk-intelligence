@@ -1,0 +1,134 @@
+{
+  "model_name": "conservative_xgb_v1",
+  "model_type": "sklearn Pipeline (ColumnTransformer + XGBClassifier)",
+  "feature_set_name": "conservative_v1",
+  "feature_set_status": "FROZEN",
+  "target": "default_risk",
+  "target_definition": {
+    "0": "P1/P2 low-risk classification proxy",
+    "1": "P3/P4 high-risk classification proxy"
+  },
+  "n_features": 30,
+  "features": [
+    "active_loan_ratio",
+    "active_loans",
+    "age",
+    "auto_loans",
+    "closed_loans",
+    "credit_card_loans",
+    "credit_history_months",
+    "delinquency_score",
+    "education",
+    "gender",
+    "gold_loans",
+    "has_credit_card",
+    "has_gold_loan",
+    "has_home_loan",
+    "has_personal_loan",
+    "home_loans",
+    "income_tier",
+    "loan_type_diversity",
+    "marital_status",
+    "missed_payment_ratio",
+    "monthly_income_inr",
+    "num_times_60p_dpd",
+    "num_times_delinquent",
+    "personal_loans",
+    "recent_enquiries_12m",
+    "recent_enquiries_6m",
+    "secured_loans",
+    "total_enquiries",
+    "total_missed_payments",
+    "unsecured_loans"
+  ],
+  "numeric_features": [
+    "active_loan_ratio",
+    "active_loans",
+    "age",
+    "auto_loans",
+    "closed_loans",
+    "credit_card_loans",
+    "credit_history_months",
+    "delinquency_score",
+    "gold_loans",
+    "has_credit_card",
+    "has_gold_loan",
+    "has_home_loan",
+    "has_personal_loan",
+    "home_loans",
+    "loan_type_diversity",
+    "missed_payment_ratio",
+    "monthly_income_inr",
+    "num_times_60p_dpd",
+    "num_times_delinquent",
+    "personal_loans",
+    "recent_enquiries_12m",
+    "recent_enquiries_6m",
+    "secured_loans",
+    "total_enquiries",
+    "total_missed_payments",
+    "unsecured_loans"
+  ],
+  "categorical_features": [
+    "education",
+    "gender",
+    "income_tier",
+    "marital_status"
+  ],
+  "review_features_included": [
+    "recent_enquiries_6m",
+    "recent_enquiries_12m",
+    "total_enquiries"
+  ],
+  "governance_checks": {
+    "feature_leakage_audit": "PASS",
+    "feature_semantics_audit": "PASS",
+    "prediction_time_provenance": "PASS"
+  },
+  "governance_note": "Provenance sign-off PASSED (30/30 features) per data/gold/exports/analytics/ml/provenance/prediction_time_provenance_summary.json. final_model_summary.json still shows decision=PENDING because final_model_selection.py has not been re-run since provenance passed -- that file is stale, not this one.",
+  "hyperparameters": {
+    "n_estimators": 300,
+    "max_depth": 4,
+    "learning_rate": 0.05,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "random_state": 42
+  },
+  "preprocessing": {
+    "numeric": "SimpleImputer(strategy=median)",
+    "categorical": "SimpleImputer(strategy=most_frequent) -> OneHotEncoder(handle_unknown=ignore)"
+  },
+  "training_rows_full_dataset": 51336,
+  "train_positive_rate": 0.2597397537790245,
+  "held_out_evaluation": {
+    "split": "80/20 stratified, random_state=42",
+    "train_rows": 41068,
+    "test_rows": 10268,
+    "test_metrics": {
+      "roc_auc": 0.8970988217316146,
+      "pr_auc": 0.7775732775281332,
+      "brier_score": 0.10718883574008942,
+      "precision_at_0.50": 0.7411610650371017,
+      "recall_at_0.50": 0.6366704161979753,
+      "f1_at_0.50": 0.6849536103267446
+    }
+  },
+  "cross_validation_reference": {
+    "note": "See data/gold/exports/analytics/ml/cross_validation/cv_summary.parquet for 5-fold CV",
+    "mean_roc_auc": 0.8962,
+    "std_roc_auc": 0.0042
+  },
+  "deployment_note": "This .joblib is refit on 100% of the 51,336-row dataset (not just the 80% train split) since the held-out split above already gave an honest test-set read on generalization. Use the held_out_evaluation metrics for reporting model quality, not a re-evaluation against this artifact on the same data it was trained on.",
+  "known_limitations": [
+    "cibil_band subgroup 'very_good' shows ROC-AUC ~0.61 -- weak discrimination in the safest population (see subgroup_robustness outputs).",
+    "cibil_band subgroup 'fair' has default_rate=1.00 in some test splits (n small, degenerate class balance) -- ROC-AUC undefined for that bin, not '1.0 perfect'."
+  ],
+  "environment": {
+    "python": "3.12.3",
+    "scikit_learn": "1.8.0",
+    "xgboost": "3.4.1"
+  },
+  "trained_at_utc": "2026-08-23T08:16:48.670465+00:00"
+}
