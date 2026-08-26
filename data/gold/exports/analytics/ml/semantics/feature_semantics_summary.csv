@@ -1,2 +1,0 @@
-features_audited,numeric_features,categorical_features,consistent_direction_features,weak_association_features,ambiguous_expectation_features,direction_mismatches,strong_single_feature_signals,features_requiring_review,missing_features,audit_status,interpretation,important_note
-30,25,5,6,5,14,0,0,0,0,PASS,Semantic associations are consistent with the configured domain expectations.,"Observed association does not establish causality. A direction mismatch or strong association is an investigation signal, not proof of leakage."

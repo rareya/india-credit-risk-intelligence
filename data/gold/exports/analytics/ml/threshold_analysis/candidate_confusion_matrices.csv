@@ -1,6 +1,0 @@
-candidate,threshold,true_negatives,false_positives,false_negatives,true_positives
-maximum_f1,0.4,6732,869,732,1935
-minimum_expected_loss_proxy,0.15,5303,2298,234,2433
-high_recall,0.25,6100,1501,445,2222
-high_precision,0.45,6876,725,848,1819
-balanced_precision_recall,0.4,6732,869,732,1935
