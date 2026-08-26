@@ -33,9 +33,7 @@ verified.
 
 Outputs
 -------
-data/gold/exports/analytics/ml/provenance/
-
-    prediction_time_provenance.parquet
+data\model\evaluation\provenance   
     prediction_time_provenance.csv
     prediction_time_provenance_summary.json
 """
@@ -54,7 +52,7 @@ import pandas as pd
 
 BASE_DIR = Path("data/gold/exports/analytics")
 ML_DIR = BASE_DIR / "ml"
-OUTPUT_DIR = ML_DIR / "provenance"
+OUTPUT_DIR = "data\model\evaluation\provenance"
 
 GOLD_PATH = Path(
     "data/gold/exports/fact_credit_risk.parquet"

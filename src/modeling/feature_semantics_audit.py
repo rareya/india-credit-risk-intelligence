@@ -50,7 +50,7 @@ from sklearn.metrics import roc_auc_score
 
 BASE_DIR = Path("data/gold/exports/analytics")
 ML_DIR = BASE_DIR / "ml"
-OUTPUT_DIR = ML_DIR / "semantics"
+OUTPUT_DIR = "data\model\evaluation\semantics"
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

@@ -43,13 +43,10 @@ from src.modeling.final_model_config import (
 # PATHS
 # ============================================================
 
-GOLD_DIR = Path("data/gold/exports")
+##GOLD_DIR = Path("data/gold/exports")
 
 OUTPUT_DIR = (
-    GOLD_DIR /
-    "analytics" /
-    "ml" /
-    "cross_validation"
+    "data\model\evaluation\cross_validation"
 )
 
 OUTPUT_DIR.mkdir(

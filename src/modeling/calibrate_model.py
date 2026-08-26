@@ -56,13 +56,10 @@ warnings.filterwarnings("ignore")
 # PATHS
 # ============================================================
 
-GOLD_DIR = Path("data/gold/exports")
+##GOLD_DIR = Path("data/gold/exports")
 
 OUTPUT_DIR = (
-    GOLD_DIR /
-    "analytics" /
-    "ml" /
-    "calibration"
+    "data\model\evaluation\calibration"
 )
 
 OUTPUT_DIR.mkdir(

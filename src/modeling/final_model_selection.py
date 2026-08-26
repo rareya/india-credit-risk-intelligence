@@ -22,7 +22,7 @@ import pandas as pd
 BASE_DIR = Path("data/gold/exports/analytics")
 ML_DIR = BASE_DIR / "ml"
 
-OUTPUT_DIR = ML_DIR / "final"
+OUTPUT_DIR = "data\model\evaluation\final"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

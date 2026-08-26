@@ -100,10 +100,7 @@ warnings.filterwarnings("ignore")
 GOLD_DIR = Path("data/gold/exports")
 
 OUTPUT_DIR = (
-    GOLD_DIR
-    / "analytics"
-    / "ml"
-    / "subgroup_robustness"
+   "data\model\evaluation\subgroup_robustness"
 )
 
 OUTPUT_DIR.mkdir(

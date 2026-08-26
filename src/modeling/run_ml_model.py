@@ -77,7 +77,7 @@ REGISTRY_FILE = (
     "feature_governance.parquet"
 )
 
-OUTPUT_DIR = ANALYTICS_DIR / "ml"
+OUTPUT_DIR = "data/model/evaluation"
 
 OUTPUT_DIR.mkdir(
     parents=True,

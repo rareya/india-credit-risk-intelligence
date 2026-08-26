@@ -23,7 +23,7 @@ import pandas as pd
 
 
 GOLD_DIR = Path("data/gold/exports")
-ANALYTICS_DIR = GOLD_DIR / "analytics"
+ANALYTICS_DIR = "data/model/evaluation" 
 
 FACT_FILE = GOLD_DIR / "fact_credit_risk.parquet"
 

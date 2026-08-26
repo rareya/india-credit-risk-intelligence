@@ -25,7 +25,7 @@ from feature_registry import (
 
 GOLD_DIR = Path("data/gold/exports")
 ANALYTICS_DIR = GOLD_DIR / "analytics"
-OUTPUT_DIR = ANALYTICS_DIR / "ml" / "provenance"
+OUTPUT_DIR = 'data\model\evaluation\provenance'
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
