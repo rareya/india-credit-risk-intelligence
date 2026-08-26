@@ -1333,23 +1333,23 @@ elif "07" in page:
         })
     summary_df = pd.DataFrame(summary_rows)
 
-st.dataframe(
-    summary_df,
-    use_container_width=True,
-    hide_index=True,
-    height=min(80 + len(summary_df) * 42, 650),
-    column_config={
-        "Query": st.column_config.TextColumn(
-            "Query",
-            width="medium",
-        ),
-        "Layer": st.column_config.TextColumn(
-            "Layer",
-            width="medium",
-        ),
-        "Business Question": st.column_config.TextColumn(
-            "Business Question",
-            width="large",
-        ),
-    },
-)
+    st.dataframe(
+        summary_df,
+        use_container_width=True,
+        hide_index=True,
+        height=min(80 + len(summary_df) * 42, 650),
+        column_config={
+            "Query": st.column_config.TextColumn(
+                "Query",
+                width="medium",
+            ),
+            "Layer": st.column_config.TextColumn(
+                "Layer",
+                width="medium",
+            ),
+            "Business Question": st.column_config.TextColumn(
+                "Business Question",
+                width="large",
+            ),
+        },
+    )
